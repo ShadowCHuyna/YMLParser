@@ -303,17 +303,18 @@ static char *fold_scalar(const char *src, size_t len) {
     if (!buf) return NULL;
     size_t w = 0;
     for (size_t i = 0; i < len; ) {
-        if (src[i] == '\n') {
-            if (i+1 < len && src[i+1] == '\n') {
-                /* blank line: output one \n, skip all consecutive blank lines */
-                buf[w++] = '\n';
-                while (i < len && src[i] == '\n') i++;
-            } else {
-                buf[w++] = ' ';
-                i++;
-            }
+        if (src[i] != '\n') { buf[w++] = src[i++]; continue; }
+        if (i + 1 >= len) {
+            /* финальный \n: сохранить (clip chomping) */
+            buf[w++] = '\n'; i++;
+        } else if (src[i+1] == '\n') {
+            /* пустые строки: текущий \n сворачивается,
+               каждая пустая строка → один \n в выводе */
+            i++;
+            while (i < len && src[i] == '\n') { buf[w++] = '\n'; i++; }
         } else {
-            buf[w++] = src[i++];
+            /* одиночный \n между строками → пробел */
+            buf[w++] = ' '; i++;
         }
     }
     buf[w] = '\0';
@@ -831,6 +832,7 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals) {
 }
 
 YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals) {
+    g_ok = 0; g_error[0] = '\0'; /* каждый вызов обновляет глобальное состояние */
     if (!hm) {
         set_error(1, "YMLMapGet: null object");
         if (optionals.ok)    *optionals.ok    = g_ok;
