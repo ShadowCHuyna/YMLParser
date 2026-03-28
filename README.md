@@ -1,7 +1,7 @@
 # YMLParser
 
-Однофайловый YAML 1.2.2 парсер на чистом C11 (только stdlib).
-Возвращает дерево `YMLValue*`, которое можно обходить через простой API без внешних зависимостей.
+Однофайловый YAML 1.2.2 парсер.
+Возвращает дерево `YMLValue*`, которое можно обходить через простой API.
 
 ---
 
@@ -13,6 +13,7 @@
    - [Статическая библиотека (.a / .lib)](#статическая-библиотека)
    - [Динамическая библиотека (.so / .dll)](#динамическая-библиотека)
 3. [Подключение в проект](#подключение-в-проект)
+   - [Single-header](#single-header)
 4. [API](#api)
    - [Типы](#типы)
    - [YMLParse](#ymlparse)
@@ -22,41 +23,44 @@
    - [YMLMapForech](#ymlmapforech)
    - [ArrayLen](#arraylen)
    - [YMLErrorPrint](#ymlerrorprint)
-5. [Что поддерживается](#что-поддерживается)
-6. [Что не поддерживается](#что-не-поддерживается)
+5. [Обработка ошибок](#обработка-ошибок)
+6. [Что поддерживается](#что-поддерживается)
+7. [Что не поддерживается](#что-не-поддерживается)
 
 ---
 
 ## Быстрый старт
 
 ```c
+#define YMLPARSER_IMPLEMENTATION
 #include "YMLParser.h"
+#include <stdio.h>
 
 int main(void) {
-    int ok = 0;
+	YMLValue *root = YMLParse(
+		"name: Alice\n"
+		"age: 30\n"
+		"tags: [dev, yaml]\n"
+	);
+	if (YMLErrorPrint() != 0) return 1;
 
-    YMLValue *root = YMLParse(
-        "name: Alice\n"
-        "age: 30\n"
-        "tags: [dev, yaml]\n",
-        .ok = &ok
-    );
-    if (ok != 0) { YMLErrorPrint(); return ok; }
+	YMLValue *name = YMLMapGet(root->value.object, "name");
+	YMLValue *age  = YMLMapGet(root->value.object, "age");
+	printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
 
-    YMLValue *name = YMLMapGet(root->value.object, "name", .ok=&ok);
-    YMLValue *age  = YMLMapGet(root->value.object, "age",  .ok=&ok);
-    printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
+	YMLValue *tags = YMLMapGet(root->value.object, "tags");
+	for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
+		printf("tag: %s\n", tags->value.array[i].value.string);
 
-    YMLValue *tags = YMLMapGet(root->value.object, "tags", .ok=&ok);
-    for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
-        printf("tag: %s\n", tags->value.array[i].value.string);
+	YMLMapForech(root->value.object, key, val)
+		printf("key: %s\n", key);
 
-    YMLMapForech(root->value.object, key, val)
-        printf("key: %s\n", key);
-
-    YMLDestroy(root);
-    return 0;
+	YMLDestroy(root);
+	return 0;
 }
+```
+```sh
+gcc -std=c23 -o my_app my_app.c -lm
 ```
 
 ---
@@ -129,6 +133,25 @@ gcc -std=c11 -D_POSIX_C_SOURCE=200809L -Isrc \
 ```
 
 Единственный публичный заголовок — `src/YMLParser.h`.
+
+### Single-header
+
+Альтернативный вариант — файл `YMLParser.h` в корне репозитория, содержащий и API, и реализацию в одном заголовке. Никаких дополнительных `.c` файлов и флагов компилятора не требуется.
+
+В **одном** файле проекта перед включением определить макрос реализации:
+
+```c
+#define YMLPARSER_IMPLEMENTATION
+#include "YMLParser.h"
+```
+
+Во всех остальных файлах — просто `#include "YMLParser.h"` без макроса.
+
+Компиляция:
+
+```sh
+gcc -std=c23 -o my_app my_app.c -lm
+```
 
 ---
 
@@ -289,6 +312,51 @@ int YMLErrorPrint(void);
 YMLMapGet(root->value.object, "missing_key");
 if (YMLErrorPrint() != 0) { /* ... */ }
 ```
+
+---
+
+## Обработка ошибок
+
+Все функции API принимают необязательные именованные аргументы `.ok` и `.error` — это реализовано через макрос поверх C99 designated initializers и `__VA_ARGS__`. С точки зрения синтаксиса выглядит как keyword arguments, хотя в C их нет.
+
+```c
+YMLValue *v = YMLParse("x: 1\n", .ok=&ok, .error=&err);
+```
+
+### Два режима работы
+
+**1. С явной проверкой** — передать `.ok` и проверять после каждого вызова:
+
+```c
+int ok = 0;
+char *err = NULL;
+
+YMLValue *root = YMLParse(yml, .ok=&ok, .error=&err);
+if (ok != 0) { fprintf(stderr, "%d: %s\n", ok, err); return ok; }
+
+YMLValue *port = YMLMapGet(root->value.object, "port", .type=YML_INT, .ok=&ok);
+if (ok != 0) { /* ключ не найден или неверный тип */ }
+```
+
+**2. Через глобальное состояние** — не передавать `.ok`, проверять через `YMLErrorPrint()`:
+
+```c
+YMLValue *root = YMLParse(yml);
+YMLValue *host = YMLMapGet(root->value.object, "host");
+YMLValue *port = YMLMapGet(root->value.object, "port");
+
+if (YMLErrorPrint() != 0) return 1;  // покажет последнюю ошибку в stderr
+```
+
+Каждый вызов сбрасывает глобальное состояние. `YMLErrorPrint()` возвращает код последней ошибки (или `0` если её нет) и при наличии ошибки печатает текст в `stderr`.
+
+### Коды ошибок
+
+| Код | Значение |
+|-----|----------|
+| `0` | Успех |
+| `1` | Ключ не найден / синтаксическая ошибка |
+| `2` | Тип значения не совпадает с ожидаемым / OOM |
 
 ---
 
