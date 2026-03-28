@@ -47,7 +47,6 @@ int main(void) {
     /* ── YMLMapForech ─────────────────────────────────────────────── */
     SECTION("YMLMapForech iterates all keys");
     int count = 0;
-    char *key; YMLValue *val;
     YMLMapForech(root->value.object, key, val) {
         (void)key; (void)val;
         count++;

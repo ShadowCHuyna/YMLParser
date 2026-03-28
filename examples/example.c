@@ -22,7 +22,6 @@ int main(){
 	}
 	printf("test_val: %lld\n", (long long)test_val->value.integer);
 
-	char* key;
 	YMLMapForech(root->value.object, key, test_val){
 		printf("key: %s\n", key);
 	}

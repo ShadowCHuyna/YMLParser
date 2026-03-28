@@ -73,7 +73,6 @@ int main(void) {
 
     /* итерация по всем ключам */
     printf("\nВсе ключи:");
-    char *key; YMLValue *val;
     YMLMapForech(root->value.object, key, val) {
         printf(" %s", key);
     }

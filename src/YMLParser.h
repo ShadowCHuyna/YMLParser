@@ -163,16 +163,14 @@ bool        _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **valu
 
 /*
  * Итерация по всем парам ключ-значение объекта.
- * key   — уже объявленная переменная char*
- * value — уже объявленная переменная YMLValue*
+ * key_name и val_name — имена переменных, объявляются макросом внутри цикла.
  *
  * Пример:
- *   char *key;
- *   YMLValue *val;
  *   YMLMapForech(root->value.object, key, val) {
  *       printf("%s\n", key);
  *   }
  */
-#define YMLMapForech(object, key, value) \
-	for (_YMLMapIter _yml_iter_ = _YMLMapIterBegin(object); \
-	     _YMLMapIterNext(&_yml_iter_, (const char **)&(key), &(value)); )
+#define YMLMapForech(object, key_name, val_name) \
+	for (_YMLMapIter _yml_it_ = _YMLMapIterBegin(object), *_yml_p_ = &_yml_it_; _yml_p_; _yml_p_ = NULL) \
+	for (const char *(key_name) = NULL; _yml_p_; _yml_p_ = NULL) \
+	for (YMLValue   *(val_name) = NULL; _YMLMapIterNext(&_yml_it_, (const char **)&(key_name), &(val_name)); )
