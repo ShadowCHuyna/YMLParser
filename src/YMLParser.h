@@ -10,7 +10,7 @@
  *   YML_BOOL    bool
  *   YML_INT     int64_t  (целые: 42, 0xFF, 0o17)
  *   YML_FLOAT   double   (вещественные: 3.14, .inf, .nan)
- *   YML_STRING  const char* (ta-память, NUL-terminated)
+ *   YML_STRING  const char* (heap, NUL-terminated, владеет YMLValue)
  *   YML_OBJECT  hm<hm_str, YMLValue>  — доступ через YMLMapGet / YMLMapForech
  *   YML_ARRAY   da<YMLValue>          — индексация value.array[i], длина через ArrayLen
  *
@@ -48,8 +48,8 @@ typedef struct YMLValue {
 		int64_t           integer;
 		double            number;
 		const char       *string;
-		struct YMLValue  *object;
-		struct YMLValue  *array;
+		void             *object;  // _hm* — непрозрачный указатель, доступ через YMLMapGet/YMLMapForech
+		struct YMLValue  *array;   // da<YMLValue> — прямая индексация arr[i], длина через ArrayLen
 	} value;
 } YMLValue;
 
@@ -154,6 +154,7 @@ YMLValue *_YMLMapGet(YMLValue *object, const char *key, struct _YMLOptionals opt
  * Итератор по парам ключ-значение YML_OBJECT.
  * Используется внутри макроса YMLMapForech.
  */
+/* _hm — непрозрачный указатель на внутреннюю структуру hm, _i — текущий слот. */
 typedef struct { void *_hm; size_t _i; } _YMLMapIter;
 _YMLMapIter _YMLMapIterBegin(YMLValue *object);
 bool        _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
