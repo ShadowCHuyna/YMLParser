@@ -13,15 +13,17 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-typedef struct {
-    char     *key;    /* strdup, NULL = пустой слот */
-    YMLValue  value;
+typedef struct
+{
+	char *key; /* strdup, NULL = пустой слот */
+	YMLValue value;
 } _hm_entry;
 
-typedef struct {
-    _hm_entry *entries; /* malloc-массив слотов (не da — управляется вручную) */
-    size_t     cap;     /* количество слотов (степень двойки) */
-    size_t     len;     /* количество занятых слотов */
+typedef struct
+{
+	_hm_entry *entries; /* malloc-массив слотов (не da — управляется вручную) */
+	size_t cap;			/* количество слотов (степень двойки) */
+	size_t len;			/* количество занятых слотов */
 } _hm;
 
 /* Выделить новую hm. cap — начальное количество слотов (округляется до степени 2). */

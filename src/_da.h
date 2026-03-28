@@ -14,7 +14,11 @@
 
 #include <stddef.h>
 
-typedef struct { size_t len; size_t cap; } _da_hdr;
+typedef struct
+{
+	size_t len;
+	size_t cap;
+} _da_hdr;
 
 /* Выделить новый da для элементов размером elem_size. */
 void *_da_new(size_t elem_size, size_t cap);
@@ -43,10 +47,12 @@ void _da_free(void *da);
  *   for (size_t i = 0; i < da_len(arr); i++) printf("%d\n", arr[i]);
  *   da_free(arr);
  */
-#define da_new(T, cap)      ((T*)_da_new(sizeof(T), (cap)))
-#define da_len(da)          (((_da_hdr*)(da) - 1)->len)
-#define da_push(da, val)    do {                                    \
-        __typeof__(val) _v = (val);                                 \
-        (da) = _da_push((da), &_v, sizeof(_v));                     \
-    } while(0)
-#define da_free(da)         _da_free(da)
+#define da_new(T, cap) ((T *)_da_new(sizeof(T), (cap)))
+#define da_len(da) (((_da_hdr *)(da) - 1)->len)
+#define da_push(da, val)                        \
+	do                                          \
+	{                                           \
+		__typeof__(val) _v = (val);             \
+		(da) = _da_push((da), &_v, sizeof(_v)); \
+	} while (0)
+#define da_free(da) _da_free(da)

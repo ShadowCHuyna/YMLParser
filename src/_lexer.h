@@ -21,48 +21,51 @@
 
 #include <stddef.h>
 
-typedef enum {
-    TK_DOC_START,       /* ---                         */
-    TK_DOC_END,         /* ...                         */
+typedef enum
+{
+	TK_DOC_START, /* ---                         */
+	TK_DOC_END,	  /* ...                         */
 
-    TK_SEQ_ENTRY,       /* -<пробел> в блочном контексте */
-    TK_MAP_KEY,         /* ?<пробел> явный ключ         */
-    TK_MAP_VAL,         /* :<пробел|перевод|EOF>        */
+	TK_SEQ_ENTRY, /* -<пробел> в блочном контексте */
+	TK_MAP_KEY,	  /* ?<пробел> явный ключ         */
+	TK_MAP_VAL,	  /* :<пробел|перевод|EOF>        */
 
-    TK_FLOW_SEQ_START,  /* [  */
-    TK_FLOW_SEQ_END,    /* ]  */
-    TK_FLOW_MAP_START,  /* {  */
-    TK_FLOW_MAP_END,    /* }  */
-    TK_FLOW_ENTRY,      /* ,  */
+	TK_FLOW_SEQ_START, /* [  */
+	TK_FLOW_SEQ_END,   /* ]  */
+	TK_FLOW_MAP_START, /* {  */
+	TK_FLOW_MAP_END,   /* }  */
+	TK_FLOW_ENTRY,	   /* ,  */
 
-    TK_SCALAR,          /* любой скаляр (plain, '...', "...", |, >) */
-    TK_ANCHOR,          /* &name  */
-    TK_ALIAS,           /* *name  */
-    TK_TAG,             /* !!str / !tag / !<uri> */
+	TK_SCALAR, /* любой скаляр (plain, '...', "...", |, >) */
+	TK_ANCHOR, /* &name  */
+	TK_ALIAS,  /* *name  */
+	TK_TAG,	   /* !!str / !tag / !<uri> */
 
-    TK_EOF,
+	TK_EOF,
 } TK_Type;
 
-typedef enum {
-    SCALAR_PLAIN,           /* foo, 42, true, null         */
-    SCALAR_SINGLE_QUOTED,   /* 'foo bar'                   */
-    SCALAR_DOUBLE_QUOTED,   /* "foo\nbar"                  */
-    SCALAR_LITERAL,         /* |  (сохраняет переводы строк) */
-    SCALAR_FOLDED,          /* >  (сворачивает переводы строк) */
+typedef enum
+{
+	SCALAR_PLAIN,		  /* foo, 42, true, null         */
+	SCALAR_SINGLE_QUOTED, /* 'foo bar'                   */
+	SCALAR_DOUBLE_QUOTED, /* "foo\nbar"                  */
+	SCALAR_LITERAL,		  /* |  (сохраняет переводы строк) */
+	SCALAR_FOLDED,		  /* >  (сворачивает переводы строк) */
 } ScalarStyle;
 
-typedef struct {
-    TK_Type     type;
-    int         line;    /* 1-based номер строки начала токена */
-    int         col;     /* 0-based столбец начала токена (= отступ для блочных) */
+typedef struct
+{
+	TK_Type type;
+	int line; /* 1-based номер строки начала токена */
+	int col;  /* 0-based столбец начала токена (= отступ для блочных) */
 
-    /* Заполняется для TK_SCALAR, TK_ANCHOR, TK_ALIAS, TK_TAG.
-     * Указывает в исходную строку — НЕ NUL-terminated!
-     * Длина в value_len. Парсер копирует при необходимости. */
-    const char *value;
-    size_t      value_len;
+	/* Заполняется для TK_SCALAR, TK_ANCHOR, TK_ALIAS, TK_TAG.
+	 * Указывает в исходную строку — НЕ NUL-terminated!
+	 * Длина в value_len. Парсер копирует при необходимости. */
+	const char *value;
+	size_t value_len;
 
-    ScalarStyle style;  /* только для TK_SCALAR */
+	ScalarStyle style; /* только для TK_SCALAR */
 } Token;
 
 /*
