@@ -144,7 +144,8 @@ int YMLErrorPrint(void);
  *   1 — ключ не найден
  *   2 — тип не совпадает с ожидаемым
  */
-YMLValue *_YMLMapGet(YMLValue *object, const char *key, struct _YMLOptionals optionals);
+/* hm — указатель YMLValue.value.object (void* = _hm*) */
+YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
 
 #define YMLMapGet(object, key, ...) \
 	_YMLMapGet(object, key, (struct _YMLOptionals){ .ok=NULL, .error=NULL, .type=YML_ANY, __VA_ARGS__ })
@@ -156,7 +157,8 @@ YMLValue *_YMLMapGet(YMLValue *object, const char *key, struct _YMLOptionals opt
  */
 /* _hm — непрозрачный указатель на внутреннюю структуру hm, _i — текущий слот. */
 typedef struct { void *_hm; size_t _i; } _YMLMapIter;
-_YMLMapIter _YMLMapIterBegin(YMLValue *object);
+/* hm — указатель YMLValue.value.object */
+_YMLMapIter _YMLMapIterBegin(void *hm);
 bool        _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 
 /*
