@@ -51,7 +51,7 @@ true True TRUE / false ...    → YML_BOOL
 
 Память: только `malloc`/`realloc`/`free`/`strdup`.
 
-## [ ] реализация парсера
+## [X] реализация парсера
 Порядок реализации:
 1. `_da.c`     — `_da_new`, `_da_push`, `_da_free`
 2. `_hm.c`     — `hm_new`, `hm_set`, `hm_get`, `hm_next`, `hm_free`

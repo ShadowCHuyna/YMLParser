@@ -62,7 +62,7 @@ typedef struct YMLValue {
  * Все da освобождаются при YMLDestroy / YMLDestroyStream —
  * если нужны данные после уничтожения дерева, скопируй их заранее.
  */
-typedef struct { size_t len; } _da_header;
+typedef struct { size_t len; size_t cap; } _da_header; /* должен совпадать с _da_hdr из _da.h */
 
 /*
  * Возвращает количество элементов в da-массиве.

@@ -326,7 +326,8 @@ static void anchor_add(Parser *p, const char *name, size_t name_len, YMLValue *n
     char *n = malloc(name_len + 1);
     if (!n) return;
     memcpy(n, name, name_len); n[name_len] = '\0';
-    _anchor_entry e = { .name=n, .node=node };
+    /* хранить deep copy: оригинальный node может быть скопирован в hm и освобождён */
+    _anchor_entry e = { .name=n, .node=yml_deep_copy(node) };
     da_push(p->anchors, e);
 }
 
@@ -391,6 +392,11 @@ static YMLValue *yml_deep_copy(const YMLValue *src) {
  * Игнорируем кастомные (!mytype и т.п.).
  * tag_val / tag_len — содержимое тега включая ! (например "!!str", len=5).
  */
+/*
+ * Применить тег к уже построенному значению v.
+ * При необходимости конвертирует значение + тип.
+ * Работает только с plain-скалярами — вызывается из parse_node.
+ */
 static void apply_tag(YMLValue *v, const char *tag, size_t tag_len) {
     if (tag_len < 2) return;
     /* нормализовать: !!str → "str", !str → "str" */
@@ -399,17 +405,47 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len) {
     if (tl >= 2 && t[0]=='!' && t[1]=='!') { t+=2; tl-=2; }
     else if (tl >= 1 && t[0]=='!') { t++; tl--; }
 
-    if (tl==4 && memcmp(t,"null",4)==0) { v->type=YML_NULL; return; }
-    if (tl==4 && memcmp(t,"bool",4)==0) { v->type=YML_BOOL; return; }
-    if (tl==3 && memcmp(t,"int",3)==0)  { v->type=YML_INT;  return; }
-    if (tl==5 && memcmp(t,"float",5)==0){ v->type=YML_FLOAT; return; }
+    if (tl==4 && memcmp(t,"null",4)==0)  { v->type=YML_NULL; return; }
+    if (tl==5 && memcmp(t,"float",5)==0) { v->type=YML_FLOAT; return; }
+    /* !!seq, !!map — структуры, не конвертируем */
+
     if (tl==3 && memcmp(t,"str",3)==0) {
-        /* принудительно строка: если тип не строка — конвертировать нельзя,
-           просто пометим что ожидалась строка; если уже строка — ок */
-        if (v->type != YML_STRING) v->type = YML_STRING;
+        if (v->type == YML_STRING) return;
+        char buf[64] = "";
+        switch (v->type) {
+        case YML_INT:   snprintf(buf, sizeof(buf), "%" PRId64, v->value.integer); break;
+        case YML_FLOAT: snprintf(buf, sizeof(buf), "%g",       v->value.number);  break;
+        case YML_BOOL:  snprintf(buf, sizeof(buf), "%s", v->value.boolean ? "true" : "false"); break;
+        case YML_NULL:  snprintf(buf, sizeof(buf), "null"); break;
+        default: break;
+        }
+        v->type = YML_STRING;
+        v->value.string = strdup(buf);
         return;
     }
-    /* !!seq, !!map — ожидаются соответствующие типы, не переопределяем */
+
+    if (tl==3 && memcmp(t,"int",3)==0) {
+        if (v->type == YML_INT) return;
+        if (v->type == YML_STRING) {
+            char *end; int64_t n = strtoll(v->value.string, &end, 0);
+            free((char*)v->value.string);
+            v->type = YML_INT; v->value.integer = n;
+        } else if (v->type == YML_FLOAT) {
+            v->type = YML_INT; v->value.integer = (int64_t)v->value.number;
+        }
+        return;
+    }
+
+    if (tl==4 && memcmp(t,"bool",4)==0) {
+        if (v->type == YML_BOOL) return;
+        bool b = false;
+        if (v->type == YML_STRING)
+            b = (strcmp(v->value.string,"true")==0 || strcmp(v->value.string,"1")==0);
+        else if (v->type == YML_INT) b = v->value.integer != 0;
+        if (v->type == YML_STRING) free((char*)v->value.string);
+        v->type = YML_BOOL; v->value.boolean = b;
+        return;
+    }
 }
 
 /* ── parse_scalar ──────────────────────────────────────────────────── */
@@ -743,8 +779,11 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals) {
         root = NULL; /* TODO: освободить частично построенное дерево */
     }
 
-    /* освободить имена якорей (strdup'd в anchor_add) */
-    for (size_t i = 0; i < da_len(p.anchors); i++) free(p.anchors[i].name);
+    /* освободить имена и deep-copy ноды якорей */
+    for (size_t i = 0; i < da_len(p.anchors); i++) {
+        free(p.anchors[i].name);
+        _YMLDestroy(p.anchors[i].node, (struct _YMLOptionals){0});
+    }
     da_free(p.anchors);
     da_free(tokens);
 
