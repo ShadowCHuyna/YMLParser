@@ -5,6 +5,221 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
+
+/* ── транскодирование UTF-16 / UTF-32 → UTF-8 ──────────────────────── */
+
+/* Кодировать Unicode codepoint в UTF-8; вернуть число записанных байт. */
+static int enc_utf8(uint32_t cp, char *out)
+{
+	if (cp < 0x80)
+	{
+		out[0] = (char)cp;
+		return 1;
+	}
+	if (cp < 0x800)
+	{
+		out[0] = (char)(0xC0 | (cp >> 6));
+		out[1] = (char)(0x80 | (cp & 0x3F));
+		return 2;
+	}
+	if (cp < 0x10000)
+	{
+		out[0] = (char)(0xE0 | (cp >> 12));
+		out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+		out[2] = (char)(0x80 | (cp & 0x3F));
+		return 3;
+	}
+	out[0] = (char)(0xF0 | (cp >> 18));
+	out[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+	out[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+	out[3] = (char)(0x80 | (cp & 0x3F));
+	return 4;
+}
+
+/*
+ * Транскодировать UTF-16 (LE или BE) в heap-строку UTF-8.
+ * src_bytes — длина в байтах (не считая BOM, который уже пропущен).
+ * Возвращает NUL-terminated строку или NULL при OOM.
+ */
+static char *decode_utf16(const unsigned char *src, size_t src_bytes, bool be)
+{
+	/* Худший случай: каждый code unit → 3 байта UTF-8. */
+	size_t cap = src_bytes / 2 * 3 + 1;
+	char *buf = malloc(cap);
+	if (!buf)
+		return NULL;
+	size_t w = 0;
+
+	for (size_t i = 0; i + 1 < src_bytes; i += 2)
+	{
+		uint16_t u = be
+			? (uint16_t)((src[i] << 8) | src[i + 1])
+			: (uint16_t)(src[i] | (src[i + 1] << 8));
+
+		uint32_t cp;
+		if (u >= 0xD800 && u <= 0xDBFF) /* высокий суррогат */
+		{
+			if (i + 3 >= src_bytes)
+				break;
+			uint16_t lo = be
+				? (uint16_t)((src[i + 2] << 8) | src[i + 3])
+				: (uint16_t)(src[i + 2] | (src[i + 3] << 8));
+			if (lo < 0xDC00 || lo > 0xDFFF)
+				break; /* некорректная суррогатная пара */
+			cp = 0x10000u + ((uint32_t)(u - 0xD800u) << 10) + (lo - 0xDC00u);
+			i += 2;
+		}
+		else
+			cp = u;
+
+		w += (size_t)enc_utf8(cp, buf + w);
+	}
+	buf[w] = '\0';
+	return buf;
+}
+
+/*
+ * Транскодировать UTF-32 (LE или BE) в heap-строку UTF-8.
+ * src_bytes — длина в байтах (не считая BOM).
+ * Возвращает NUL-terminated строку или NULL при OOM.
+ */
+static char *decode_utf32(const unsigned char *src, size_t src_bytes, bool be)
+{
+	/* Худший случай: каждый codepoint → 4 байта UTF-8. */
+	size_t cap = src_bytes / 4 * 4 + 1;
+	char *buf = malloc(cap);
+	if (!buf)
+		return NULL;
+	size_t w = 0;
+
+	for (size_t i = 0; i + 3 < src_bytes; i += 4)
+	{
+		uint32_t cp = be
+			? ((uint32_t)src[i] << 24) | ((uint32_t)src[i + 1] << 16)
+			| ((uint32_t)src[i + 2] << 8) | (uint32_t)src[i + 3]
+			: (uint32_t)src[i] | ((uint32_t)src[i + 1] << 8)
+			| ((uint32_t)src[i + 2] << 16) | ((uint32_t)src[i + 3] << 24);
+		w += (size_t)enc_utf8(cp, buf + w);
+	}
+	buf[w] = '\0';
+	return buf;
+}
+
+/*
+ * Определить кодировку входа и при необходимости транскодировать в UTF-8.
+ *
+ * Возвращает:
+ *   NULL        — src уже UTF-8 (out_src указывает на начало данных,
+ *                 может быть src+3 если был UTF-8 BOM)
+ *   heap-буфер  — UTF-8 копия; caller обязан free() после использования
+ *   (char*)-1   — ошибка OOM; *error_out заполнен
+ *
+ * Обнаружение по YAML 1.2.2 §5.2: BOM или паттерн нулевых байт.
+ */
+static char *normalize_encoding(const char *src, const char **out_src,
+                                const char **error_out)
+{
+	const unsigned char *b = (const unsigned char *)src;
+
+	/* UTF-32 BE: BOM 00 00 FE FF */
+	if (b[0] == 0x00 && b[1] == 0x00 && b[2] == 0xFE && b[3] == 0xFF)
+	{
+		size_t len = strlen(src + 4); /* приближённо: ищем \0 в хвосте */
+		char *r = decode_utf32(b + 4, len, true);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* UTF-32 LE: BOM FF FE 00 00 */
+	if (b[0] == 0xFF && b[1] == 0xFE && b[2] == 0x00 && b[3] == 0x00)
+	{
+		/* Длина: ищем четыре нулевых байта подряд как терминатор. */
+		size_t len = 0;
+		while (b[4 + len] || b[4 + len + 1] || b[4 + len + 2] || b[4 + len + 3])
+			len += 4;
+		char *r = decode_utf32(b + 4, len, false);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* UTF-16 BE: BOM FE FF */
+	if (b[0] == 0xFE && b[1] == 0xFF)
+	{
+		size_t len = 0;
+		while (b[2 + len] || b[2 + len + 1])
+			len += 2;
+		char *r = decode_utf16(b + 2, len, true);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* UTF-16 LE: BOM FF FE (и не UTF-32 LE — уже проверен выше) */
+	if (b[0] == 0xFF && b[1] == 0xFE)
+	{
+		size_t len = 0;
+		while (b[2 + len] || b[2 + len + 1])
+			len += 2;
+		char *r = decode_utf16(b + 2, len, false);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* UTF-8 BOM: EF BB BF — просто пропустить */
+	if (b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF)
+	{
+		*out_src = src + 3;
+		return NULL;
+	}
+	/* Implicit UTF-32 BE: 00 00 00 xx */
+	if (b[0] == 0x00 && b[1] == 0x00 && b[2] == 0x00)
+	{
+		size_t len = 0;
+		while (b[len] || b[len + 1] || b[len + 2] || b[len + 3])
+			len += 4;
+		char *r = decode_utf32(b, len, true);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* Implicit UTF-32 LE: xx 00 00 00 */
+	if (b[1] == 0x00 && b[2] == 0x00 && b[3] == 0x00)
+	{
+		size_t len = 0;
+		while (b[len] || b[len + 1] || b[len + 2] || b[len + 3])
+			len += 4;
+		char *r = decode_utf32(b, len, false);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* Implicit UTF-16 BE: 00 xx 00 xx */
+	if (b[0] == 0x00 && b[2] == 0x00)
+	{
+		size_t len = 0;
+		while (b[len] || b[len + 1])
+			len += 2;
+		char *r = decode_utf16(b, len, true);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+	/* Implicit UTF-16 LE: xx 00 xx 00 */
+	if (b[1] == 0x00 && b[3] == 0x00)
+	{
+		size_t len = 0;
+		while (b[len] || b[len + 1])
+			len += 2;
+		char *r = decode_utf16(b, len, false);
+		if (!r) { *error_out = "OOM"; return (char *)-1; }
+		*out_src = r;
+		return r;
+	}
+
+	/* UTF-8 без BOM — обычный путь */
+	*out_src = src;
+	return NULL;
+}
 
 /* ── состояние лексера ─────────────────────────────────────────────── */
 
@@ -396,10 +611,17 @@ static Token lex_tag(Lexer *l)
 
 Token *lex(const char *src, const char **error_out)
 {
-	Lexer l = {.src = src, .p = src, .line = 1, .col = 0, .flow_depth = 0, .error = NULL};
+	/* Транскодировать UTF-16/32 → UTF-8 если необходимо. */
+	const char *use_src = src;
+	char *converted = normalize_encoding(src, &use_src, error_out);
+	if (converted == (char *)-1)
+		return NULL; /* OOM при транскодировании */
+
+	Lexer l = {.src = use_src, .p = use_src, .line = 1, .col = 0, .flow_depth = 0, .error = NULL};
 	Token *tokens = da_new(Token, 64);
 	if (!tokens)
 	{
+		free(converted);
 		if (error_out)
 			*error_out = "OOM";
 		return NULL;
@@ -582,6 +804,8 @@ Token *lex(const char *src, const char **error_out)
 			da_push(tokens, t);
 		}
 	}
+
+	free(converted); /* NULL-safe; освобождаем UTF-8 буфер если был выделен */
 
 	if (l.error)
 	{

@@ -56,6 +56,19 @@ typedef struct
 	char error[256];
 } Parser;
 
+/* ── управление таблицей якорей ────────────────────────────────────── */
+
+/* Освободить все записи в таблице якорей, сохранив выделенную ёмкость da. */
+static void anchors_clear(Parser *p)
+{
+	for (size_t i = 0; i < da_len(p->anchors); i++)
+	{
+		free(p->anchors[i].name);
+		_YMLDestroy(p->anchors[i].node, (struct _YMLOptionals){0});
+	}
+	((_da_hdr *)p->anchors - 1)->len = 0;
+}
+
 /* ── утилиты парсера ───────────────────────────────────────────────── */
 
 static Token *cur(Parser *p) { return &p->tokens[p->pos]; }
@@ -1129,7 +1142,10 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 	while (cur(&p)->type != TK_EOF)
 	{
 		if (cur(&p)->type == TK_DOC_START)
+		{
+			anchors_clear(&p);
 			advance(&p);
+		}
 		if (cur(&p)->type == TK_EOF)
 			break;
 		YMLValue *doc = parse_node(&p, 0);
@@ -1142,7 +1158,10 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 		}
 		da_push(docs, doc);
 		if (cur(&p)->type == TK_DOC_END)
+		{
+			anchors_clear(&p);
 			advance(&p);
+		}
 	}
 
 	for (size_t i = 0; i < da_len(p.anchors); i++)
