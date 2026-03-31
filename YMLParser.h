@@ -1,6 +1,5 @@
 /*
  * YMLParser.h — single-header YAML 1.2.2 parser (C11).
- * Generated 2026-03-31 by tools/amalgamate.py — do not edit manually.
  *
  * ── Использование ──────────────────────────────────────────────────
  *
