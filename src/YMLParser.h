@@ -4,18 +4,18 @@
 #include <stdlib.h>
 
 /*
- * YMLValueType — тип хранимого значения.
+ * YMLValueType — type of a stored value.
  *
- *   YML_NULL    нет полезной нагрузки
+ *   YML_NULL    no payload
  *   YML_BOOL    bool
- *   YML_INT     int64_t  (целые: 42, 0xFF, 0o17)
- *   YML_FLOAT   double   (вещественные: 3.14, .inf, .nan)
- *   YML_STRING  const char* (heap, NUL-terminated, владеет YMLValue)
- *   YML_OBJECT  hm<hm_str, YMLValue>  — доступ через YMLMapGet / YMLMapForech
- *   YML_ARRAY   da<YMLValue>          — индексация value.array[i], длина через ArrayLen
+ *   YML_INT     int64_t  (integers: 42, 0xFF, 0o17)
+ *   YML_FLOAT   double   (floats: 3.14, .inf, .nan)
+ *   YML_STRING  const char* (heap-allocated, NUL-terminated, owned by YMLValue)
+ *   YML_OBJECT  hm<str, YMLValue>  — access via YMLMapGet / YMLMapForech
+ *   YML_ARRAY   da<YMLValue>       — index with value.array[i], length via ArrayLen
  *
- * YML_ANY — сентинел только для _YMLOptionals.type (значит «не проверять тип»).
- *           Не является корректным типом узла.
+ * YML_ANY — sentinel only for _YMLOptionals.type (means "skip type check").
+ *           Not a valid node type.
  */
 typedef enum YMLValueType
 {
@@ -30,16 +30,16 @@ typedef enum YMLValueType
 } YMLValueType;
 
 /*
- * YMLValue — одно значение дерева разбора.
+ * YMLValue — a single node in the parse tree.
  *
- * Поле type определяет, какой элемент union value активен:
+ * The type field determines which union member is active:
  *   YML_BOOL   → value.boolean
  *   YML_INT    → value.integer
  *   YML_FLOAT  → value.number
- *   YML_STRING → value.string  (указатель на строку, NUL-terminated)
+ *   YML_STRING → value.string  (pointer to a NUL-terminated string)
  *   YML_OBJECT → value.object  (hm<str → YMLValue>)
- *   YML_ARRAY  → value.array   (da<YMLValue>, скрытый заголовок, см. ArrayLen)
- *   YML_NULL   → value не используется
+ *   YML_ARRAY  → value.array   (da<YMLValue>, hidden header, see ArrayLen)
+ *   YML_NULL   → value is unused
  */
 typedef struct YMLValue
 {
@@ -50,45 +50,45 @@ typedef struct YMLValue
 		int64_t integer;
 		double number;
 		const char *string;
-		void *object;			// _hm* — непрозрачный указатель, доступ через YMLMapGet/YMLMapForech
-		struct YMLValue *array; // da<YMLValue> — прямая индексация arr[i], длина через ArrayLen
+		void *object;			// _hm* — opaque pointer, access via YMLMapGet/YMLMapForech
+		struct YMLValue *array; // da<YMLValue> — direct indexing arr[i], length via ArrayLen
 	} value;
 } YMLValue;
 
 /*
- * Скрытый заголовок динамических массивов da<T>.
- * Расположен непосредственно перед первым элементом в памяти:
- *   [_da_header][elem0][elem1]...
- * Пользователь держит указатель на elem0.
- * Все da освобождаются при YMLDestroy / YMLDestroyStream —
- * если нужны данные после уничтожения дерева, скопируй их заранее.
+ * Hidden header of dynamic arrays da<T>.
+ * Stored immediately before the first element in memory:
+ *   [__da_header][elem0][elem1]...
+ * The user holds a pointer to elem0.
+ * All da arrays are freed by YMLDestroy / YMLDestroyStream —
+ * copy any data you need before destroying the tree.
  */
 typedef struct
 {
 	size_t len;
 	size_t cap;
-} __da_header; /* должен совпадать с _da_hdr из _da.h */
+} __da_header; /* must match _da_hdr in _da.h */
 
 /*
- * Возвращает количество элементов в da-массиве.
- * Пример: for (size_t i = 0; i < ArrayLen(arr); i++) { ... arr[i] ... }
+ * Returns the number of elements in a da array.
+ * Example: for (size_t i = 0; i < ArrayLen(arr); i++) { ... arr[i] ... }
  */
 #define ArrayLen(arr) ((arr) ? ((__da_header *)(arr) - 1)->len : (size_t)0)
 
 struct _YMLOptionals
 {
-	int *ok;		   // 0 — без ошибок, иначе код ошибки
-	char **error;	   // *error указывает на буфер с текстом ошибки
-	YMLValueType type; // для YMLMapGet: ожидаемый тип (YML_ANY — не проверять)
+	int *ok;		   // 0 — no error, otherwise error code
+	char **error;	   // *error points to a buffer with the error message
+	YMLValueType type; // for YMLMapGet: expected type (YML_ANY — skip check)
 };
 
 /*
- * Разбирает один YAML-документ, возвращает корневой YMLValue*.
- * Если в строке несколько документов (---) — парсит только первый.
+ * Parses a single YAML document and returns the root YMLValue*.
+ * If the string contains multiple documents (---), only the first is parsed.
  *
- * Коды ошибок ok:
- *   1 — синтаксическая ошибка
- *   2 — недостаточно памяти
+ * Error codes for ok:
+ *   1 — syntax error
+ *   2 — out of memory
  */
 YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals);
 
@@ -96,16 +96,16 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals);
 	_YMLParse(yml_str, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
 
 /*
- * Разбирает YAML-поток с несколькими документами (разделитель ---).
- * Возвращает da<YMLValue*> — массив корневых узлов каждого документа.
- * Длину массива получить через ArrayLen.
+ * Parses a YAML stream with multiple documents (separated by ---).
+ * Returns da<YMLValue*> — an array of root nodes, one per document.
+ * Get the length via ArrayLen.
  *
- * Пример:
+ * Example:
  *   YMLValue **docs = YMLParseStream(yml_str);
  *   for (size_t i = 0; i < ArrayLen(docs); i++) { ... docs[i] ... }
  *   YMLDestroyStream(docs);
  *
- * Коды ошибок ok: те же что у YMLParse.
+ * Error codes for ok: same as YMLParse.
  */
 YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals);
 
@@ -113,7 +113,7 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals);
 	_YMLParseStream(yml_str, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
 
 /*
- * Освобождает память дерева одного документа (YMLParse).
+ * Frees the memory of a single-document tree (from YMLParse).
  */
 void _YMLDestroy(YMLValue *root, struct _YMLOptionals optionals);
 
@@ -121,7 +121,7 @@ void _YMLDestroy(YMLValue *root, struct _YMLOptionals optionals);
 	_YMLDestroy(root, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
 
 /*
- * Освобождает все документы потока и сам da (YMLParseStream).
+ * Frees all documents in a stream and the da array itself (from YMLParseStream).
  */
 void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals);
 
@@ -129,45 +129,45 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals);
 	_YMLDestroyStream(stream, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
 
 /*
- * Если после последней операции была ошибка — печатает её в stderr
- * и возвращает код ошибки. Иначе возвращает 0.
+ * If the last operation produced an error, prints it to stderr
+ * and returns the error code. Otherwise returns 0.
  */
 int YMLErrorPrint(void);
 
 /*
- * Возвращает YMLValue* по строковому ключу из YML_OBJECT.
- * Если ключ не найден — ошибка (ok=1).
- * Если .type != YML_ANY и тип значения не совпадает — ошибка (ok=2).
+ * Returns a YMLValue* by string key from a YML_OBJECT.
+ * If the key is not found — error (ok=1).
+ * If .type != YML_ANY and the value type does not match — error (ok=2).
  *
- * Коды ошибок ok:
- *   1 — ключ не найден
- *   2 — тип не совпадает с ожидаемым
+ * Error codes for ok:
+ *   1 — key not found
+ *   2 — type mismatch
  */
-/* hm — указатель YMLValue.value.object (void* = _hm*) */
+/* hm — YMLValue.value.object pointer (void* = _hm*) */
 YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
 
 #define YMLMapGet(object, key, ...) \
 	_YMLMapGet(object, key, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
 
 /*
- * Итератор по парам ключ-значение YML_OBJECT.
- * Используется внутри макроса YMLMapForech.
+ * Iterator over key-value pairs of a YML_OBJECT.
+ * Used internally by the YMLMapForech macro.
  */
-/* _hm — непрозрачный указатель на внутреннюю структуру hm, _i — текущий слот. */
+/* _hm — opaque pointer to the internal hm structure, _i — current slot index. */
 typedef struct
 {
 	void *_hm;
 	size_t _i;
 } _YMLMapIter;
-/* hm — указатель YMLValue.value.object */
+/* hm — YMLValue.value.object pointer */
 _YMLMapIter _YMLMapIterBegin(void *hm);
 bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 
 /*
- * Итерация по всем парам ключ-значение объекта.
- * key_name и val_name — имена переменных, объявляются макросом внутри цикла.
+ * Iterate over all key-value pairs of an object.
+ * key_name and val_name are variable names declared by the macro inside the loop.
  *
- * Пример:
+ * Example:
  *   YMLMapForech(root->value.object, key, val) {
  *       printf("%s\n", key);
  *   }

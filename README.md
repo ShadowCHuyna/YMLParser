@@ -1,21 +1,16 @@
 # YMLParser
 
-Однофайловый YAML 1.2.2 парсер.
-Возвращает дерево `YMLValue*`, которое можно обходить через простой API.
+A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define `YMLPARSER_IMPLEMENTATION` once, and get a full parse tree back as `YMLValue*`. No dependencies beyond the C standard library and `-lm`.
+
+> [Русская документация](RU_README.md)
 
 ---
 
-## Оглавление
+## Table of contents
 
-1. [Быстрый старт](#быстрый-старт)
-2. [Сборка](#сборка)
-   - [Исполняемые файлы и тесты](#исполняемые-файлы-и-тесты)
-   - [Статическая библиотека (.a / .lib)](#статическая-библиотека)
-   - [Динамическая библиотека (.so / .dll)](#динамическая-библиотека)
-3. [Подключение в проект](#подключение-в-проект)
-   - [Single-header](#single-header)
-4. [API](#api)
-   - [Типы](#типы)
+1. [Quick start](#quick-start)
+2. [API reference](#api-reference)
+   - [Types](#types)
    - [YMLParse](#ymlparse)
    - [YMLParseStream](#ymlparsestream)
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
@@ -23,13 +18,13 @@
    - [YMLMapForech](#ymlmapforech)
    - [ArrayLen](#arraylen)
    - [YMLErrorPrint](#ymlerrorprint)
-5. [Обработка ошибок](#обработка-ошибок)
-6. [Что поддерживается](#что-поддерживается)
-7. [Что не поддерживается](#что-не-поддерживается)
+3. [Error handling](#error-handling)
+4. [Build](#build)
+5. [What is not supported](#what-is-not-supported)
 
 ---
 
-## Быстрый старт
+## Quick start
 
 ```c
 #define YMLPARSER_IMPLEMENTATION
@@ -37,138 +32,51 @@
 #include <stdio.h>
 
 int main(void) {
-	YMLValue *root = YMLParse(
-		"name: Alice\n"
-		"age: 30\n"
-		"tags: [dev, yaml]\n"
-	);
-	if (YMLErrorPrint() != 0) return 1;
+    YMLValue *root = YMLParse(
+        "name: Alice\n"
+        "age: 30\n"
+        "tags: [dev, yaml]\n"
+    );
+    if (YMLErrorPrint() != 0) return 1;
 
-	YMLValue *name = YMLMapGet(root->value.object, "name");
-	YMLValue *age  = YMLMapGet(root->value.object, "age");
-	printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
+    YMLValue *name = YMLMapGet(root->value.object, "name");
+    YMLValue *age  = YMLMapGet(root->value.object, "age");
+    printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
 
-	YMLValue *tags = YMLMapGet(root->value.object, "tags");
-	for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
-		printf("tag: %s\n", tags->value.array[i].value.string);
+    YMLValue *tags = YMLMapGet(root->value.object, "tags");
+    for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
+        printf("tag: %s\n", tags->value.array[i].value.string);
 
-	YMLMapForech(root->value.object, key, val)
-		printf("key: %s\n", key);
+    YMLMapForech(root->value.object, key, val)
+        printf("key: %s\n", key);
 
-	YMLDestroy(root);
-	return 0;
+    YMLDestroy(root);
+    return 0;
 }
 ```
+
 ```sh
-gcc -std=c23 -o my_app my_app.c -lm
+gcc -std=c11 -o my_app my_app.c -lm
 ```
+
+More examples are in the [`examples/`](examples/) directory.
 
 ---
 
-## Сборка
+## API reference
 
-### Исполняемые файлы и тесты
-
-```sh
-make              # собрать все примеры из examples/
-make test         # собрать и запустить все тесты
-
-make run-test T=test_scalars      # запустить один тест
-make run-example E=example_full   # запустить конкретный пример
-```
-
-Компиляция вручную:
-
-```sh
-gcc -std=c11 -Isrc -D_POSIX_C_SOURCE=200809L \
-    -o my_app my_app.c src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c \
-    -lm
-```
-
-> `-D_POSIX_C_SOURCE=200809L` — нужен для `strdup`.
-> `-lm` — нужен для `HUGE_VAL` / `NAN`.
-
-### Статическая библиотека
-
-```sh
-make lib-static                    # Linux  → build/libYMLParser.a
-make lib-static PLATFORM=windows   # Windows → build/YMLParser.lib
-```
-
-### Динамическая библиотека
-
-```sh
-make lib-shared                    # Linux  → build/libYMLParser.so
-make lib-shared PLATFORM=windows   # Windows → build/YMLParser.dll
-```
-
-Для сборки под Windows из Linux использовать кросс-компилятор:
-
-```sh
-make lib-shared PLATFORM=windows CC=x86_64-w64-mingw32-gcc
-```
-
----
-
-## Подключение в проект
-
-**Статическая линковка (Linux):**
-
-```sh
-gcc -std=c11 -D_POSIX_C_SOURCE=200809L -Isrc \
-    my_app.c -Lbuild -lYMLParser -lm
-```
-
-**Статическая линковка (Windows / MinGW):**
-
-```sh
-gcc -std=c11 -Isrc my_app.c build/YMLParser.lib -lm
-```
-
-**Динамическая линковка (Linux):**
-
-```sh
-gcc -std=c11 -D_POSIX_C_SOURCE=200809L -Isrc \
-    my_app.c -Lbuild -lYMLParser -lm -Wl,-rpath,'$ORIGIN'
-```
-
-Единственный публичный заголовок — `src/YMLParser.h`.
-
-### Single-header
-
-Альтернативный вариант — файл `YMLParser.h` в корне репозитория, содержащий и API, и реализацию в одном заголовке. Никаких дополнительных `.c` файлов и флагов компилятора не требуется.
-
-В **одном** файле проекта перед включением определить макрос реализации:
-
-```c
-#define YMLPARSER_IMPLEMENTATION
-#include "YMLParser.h"
-```
-
-Во всех остальных файлах — просто `#include "YMLParser.h"` без макроса.
-
-Компиляция:
-
-```sh
-gcc -std=c23 -o my_app my_app.c -lm
-```
-
----
-
-## API
-
-### Типы
+### Types
 
 ```c
 typedef enum {
-    YML_ANY    = -1,  // только для .type в YMLMapGet (не проверять тип)
+    YML_ANY    = -1,  // only for .type in YMLMapGet (skip type check)
     YML_NULL   =  0,
     YML_BOOL,         // value.boolean  (bool)
     YML_INT,          // value.integer  (int64_t) — dec / 0xFF / 0o17
     YML_FLOAT,        // value.number   (double)  — 3.14 / .inf / .nan
-    YML_STRING,       // value.string   (const char*, владеет память)
-    YML_ARRAY,        // value.array    (YMLValue*, da, см. ArrayLen)
-    YML_OBJECT,       // value.object   (void*, доступ через YMLMapGet/YMLMapForech)
+    YML_STRING,       // value.string   (const char*, owned)
+    YML_ARRAY,        // value.array    (YMLValue*, da, see ArrayLen)
+    YML_OBJECT,       // value.object   (void*, access via YMLMapGet/YMLMapForech)
 } YMLValueType;
 
 typedef struct YMLValue {
@@ -192,12 +100,12 @@ typedef struct YMLValue {
 YMLValue *YMLParse(const char *yml_str, ...options...);
 ```
 
-Разбирает один YAML-документ. При наличии нескольких `---` — парсит только первый.
+Parses a single YAML document. If multiple `---` markers are present, only the first document is parsed.
 
-| Опция | Тип | По умолчанию | Описание |
-|---|---|---|---|
-| `.ok` | `int*` | `NULL` | Код результата: `0` — успех, `1` — синтакс. ошибка, `2` — OOM |
-| `.error` | `char**` | `NULL` | Текст ошибки (указатель на внутренний буфер) |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `.ok` | `int*` | `NULL` | Result code: `0` — success, `1` — syntax error, `2` — OOM |
+| `.error` | `char**` | `NULL` | Error message (pointer to an internal buffer) |
 
 ```c
 int ok = 0; char *err = NULL;
@@ -213,8 +121,7 @@ if (ok != 0) fprintf(stderr, "error %d: %s\n", ok, err);
 YMLValue **YMLParseStream(const char *yml_str, ...options...);
 ```
 
-Разбирает YAML-поток из нескольких документов, разделённых `---`.
-Возвращает `da<YMLValue*>` — массив корневых узлов.
+Parses a YAML stream of multiple documents separated by `---`. Returns `da<YMLValue*>` — an array of root nodes. Use `ArrayLen` to get the count. Anchors do not survive document boundaries (`---` / `...`).
 
 ```c
 YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok=&ok);
@@ -231,8 +138,7 @@ void YMLDestroy(YMLValue *root);
 void YMLDestroyStream(YMLValue **stream);
 ```
 
-Рекурсивно освобождают всю память дерева. Безопасны для `NULL`.
-После вызова все `YMLValue*` и `const char*` из этого дерева становятся недействительными.
+Recursively free the entire parse tree. Safe to call with `NULL`. After the call, all `YMLValue*` and `const char*` pointers from that tree are invalid.
 
 ---
 
@@ -242,25 +148,24 @@ void YMLDestroyStream(YMLValue **stream);
 YMLValue *YMLMapGet(void *object, const char *key, ...options...);
 ```
 
-Возвращает значение по строковому ключу из `YML_OBJECT`.
-`object` — это `root->value.object`.
+Returns a value by string key from a `YML_OBJECT`. `object` is `root->value.object`.
 
-| Опция | Тип | По умолчанию | Описание |
-|---|---|---|---|
-| `.ok` | `int*` | `NULL` | `0` — найдено, `1` — ключ не найден, `2` — тип не совпадает |
-| `.error` | `char**` | `NULL` | Текст ошибки |
-| `.type` | `YMLValueType` | `YML_ANY` | Ожидаемый тип; при несовпадении — `ok=2`, возврат `NULL` |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `.ok` | `int*` | `NULL` | `0` — found, `1` — key not found, `2` — type mismatch |
+| `.error` | `char**` | `NULL` | Error message |
+| `.type` | `YMLValueType` | `YML_ANY` | Expected type; mismatch sets `ok=2` and returns `NULL` |
 
 ```c
-// найти без проверки типа
+// without type check
 YMLValue *v = YMLMapGet(root->value.object, "name");
 
-// с проверкой типа и кодом ошибки
+// with type check and error code
 YMLValue *n = YMLMapGet(root->value.object, "age", .type=YML_INT, .ok=&ok);
-if (ok != 0) { /* ключ не найден или неверный тип */ }
+if (ok != 0) { /* key not found or wrong type */ }
 ```
 
-Если `.ok` не передан — ошибка попадает в глобальное состояние, доступное через `YMLErrorPrint()`.
+If `.ok` is not passed, errors go to the global state accessible via `YMLErrorPrint()`.
 
 ---
 
@@ -270,9 +175,7 @@ if (ok != 0) { /* ключ не найден или неверный тип */ }
 YMLMapForech(object, key_name, val_name) { ... }
 ```
 
-Итерация по всем парам ключ–значение `YML_OBJECT`.
-`key_name` и `val_name` — имена переменных, которые объявляются внутри макроса
-как `const char *key_name` и `YMLValue *val_name`.
+Iterate over all key–value pairs of a `YML_OBJECT`. `key_name` and `val_name` are variable names declared inside the macro as `const char *key_name` and `YMLValue *val_name`.
 
 ```c
 YMLMapForech(root->value.object, key, val) {
@@ -280,7 +183,7 @@ YMLMapForech(root->value.object, key, val) {
 }
 ```
 
-Порядок итерации не определён (hash map с открытой адресацией).
+Iteration order is unspecified (open-addressing hash map).
 
 ---
 
@@ -290,7 +193,7 @@ YMLMapForech(root->value.object, key, val) {
 size_t ArrayLen(YMLValue *array);
 ```
 
-Возвращает количество элементов в `YML_ARRAY`.
+Returns the number of elements in a `YML_ARRAY`. Returns `0` safely for `NULL`.
 
 ```c
 YMLValue *arr = YMLMapGet(root->value.object, "items");
@@ -306,7 +209,7 @@ for (size_t i = 0; i < ArrayLen(arr->value.array); i++)
 int YMLErrorPrint(void);
 ```
 
-Если последняя операция завершилась ошибкой (и `.ok` не был передан) — печатает сообщение в `stderr` и возвращает код ошибки. Иначе возвращает `0`.
+If the last operation produced an error (and `.ok` was not passed), prints the message to `stderr` and returns the error code. Otherwise returns `0`. Each call resets the global error state.
 
 ```c
 YMLMapGet(root->value.object, "missing_key");
@@ -315,17 +218,17 @@ if (YMLErrorPrint() != 0) { /* ... */ }
 
 ---
 
-## Обработка ошибок
+## Error handling
 
-Все функции API принимают необязательные именованные аргументы `.ok` и `.error` — это реализовано через макрос поверх C99 designated initializers и `__VA_ARGS__`. С точки зрения синтаксиса выглядит как keyword arguments, хотя в C их нет.
+All API functions accept optional named arguments `.ok` and `.error` implemented as a macro on top of C99 designated initializers and `__VA_ARGS__`. This gives keyword-argument-like syntax in plain C.
 
 ```c
 YMLValue *v = YMLParse("x: 1\n", .ok=&ok, .error=&err);
 ```
 
-### Два режима работы
+### Two modes
 
-**1. С явной проверкой** — передать `.ok` и проверять после каждого вызова:
+**1. Explicit check** — pass `.ok` and check after each call:
 
 ```c
 int ok = 0;
@@ -335,51 +238,77 @@ YMLValue *root = YMLParse(yml, .ok=&ok, .error=&err);
 if (ok != 0) { fprintf(stderr, "%d: %s\n", ok, err); return ok; }
 
 YMLValue *port = YMLMapGet(root->value.object, "port", .type=YML_INT, .ok=&ok);
-if (ok != 0) { /* ключ не найден или неверный тип */ }
+if (ok != 0) { /* key not found or wrong type */ }
 ```
 
-**2. Через глобальное состояние** — не передавать `.ok`, проверять через `YMLErrorPrint()`:
+**2. Global state** — skip `.ok`, check once via `YMLErrorPrint()`:
 
 ```c
 YMLValue *root = YMLParse(yml);
 YMLValue *host = YMLMapGet(root->value.object, "host");
 YMLValue *port = YMLMapGet(root->value.object, "port");
 
-if (YMLErrorPrint() != 0) return 1;  // покажет последнюю ошибку в stderr
+if (YMLErrorPrint() != 0) return 1;
 ```
 
-Каждый вызов сбрасывает глобальное состояние. `YMLErrorPrint()` возвращает код последней ошибки (или `0` если её нет) и при наличии ошибки печатает текст в `stderr`.
+Error state is `_Thread_local` — each thread sees only its own errors.
 
-### Коды ошибок
+### Error codes
 
-| Код | Значение |
-|-----|----------|
-| `0` | Успех |
-| `1` | Ключ не найден / синтаксическая ошибка |
-| `2` | Тип значения не совпадает с ожидаемым / OOM |
-
----
-
-## Что поддерживается
-
-- **Скалярные типы** (Core Schema): `null` / `~`, `bool` (`true`/`false`), `int` (десятичные, `0xFF`, `0o17`), `float` (`.inf`, `-.inf`, `.nan`, научная запись), строки
-- **Блочные коллекции**: mapping (`key: value`) и sequence (`- item`) с произвольной вложенностью
-- **Потоковые коллекции**: `{key: value}` и `[item, item]`, в том числе вложенные
-- **Кавычки**: одинарные `'...'`, двойные `"..."` (с escape-последовательностями), блочные `|` (literal) и `>` (folded) со chomping (`|+`, `|-`, `>+`, `>-`)
-- **Якоря и алиасы**: `&anchor` / `*alias`, алиасы являются независимой deep copy
-- **Merge key**: `<<: *anchor` — слияние полей из другого объекта (без перезаписи существующих ключей)
-- **Встроенные теги**: `!!str`, `!!int`, `!!float`, `!!bool`, `!!null`
-- **Многодокументные потоки**: `YMLParseStream` с разделителями `---` и `...`; якоря не переживают границу документа
-- **Комментарии**: `# ...`
-- **Кодировки**: UTF-8 (с BOM и без), UTF-16 LE/BE (с BOM и implicit), UTF-32 LE/BE (с BOM и implicit); входная строка автоматически транскодируется в UTF-8
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Key not found / syntax error |
+| `2` | Type mismatch / OOM |
 
 ---
 
-## Что не поддерживается
+## Build
 
-- **Нестроковые ключи** — ключи в mapping всегда строки; `42: value`, `[1,2]: v` не поддерживаются
-- **Кастомные теги** — `!!python/object`, `!mytag` и любые теги кроме встроенных игнорируются
-- **Директивы** — `%YAML`, `%TAG` не обрабатываются
-- **Специальные типы YAML 1.1** — `!!set`, `!!omap`, `!!pairs`, `!!binary`, `!!timestamp`
-- **Табуляция как отступ** — YAML запрещает это; парсер ожидает только пробелы
-- **Explicit keys** — блочные ключи `? key\n: value` не поддерживаются
+### Single-header (recommended)
+
+Copy `YMLParser.h` from the project root into your project. No other files needed.
+
+```sh
+gcc -std=c11 -o my_app my_app.c -lm
+```
+
+Regenerate `YMLParser.h` from `src/` after making changes:
+
+```sh
+make              # runs tools/amalgamate.py → YMLParser.h
+make check-header # verify the header is up to date (for CI)
+```
+
+### Multi-file (for library development)
+
+```sh
+make test                          # build and run all tests
+make run-test T=test_scalars       # run a single test
+make run-example E=example_nested  # run a specific example
+
+make lib-static                    # Linux  → build/libYMLParser.a
+make lib-static PLATFORM=windows   # Windows → build/YMLParser.lib
+make lib-shared                    # Linux  → build/libYMLParser.so
+make lib-shared PLATFORM=windows   # Windows → build/YMLParser.dll
+```
+
+Compile manually against `src/`:
+
+```sh
+gcc -std=c11 -Isrc -o my_app my_app.c \
+    src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c -lm
+```
+
+> `-lm` is required for `HUGE_VAL` / `NAN` from `<math.h>`.
+
+---
+
+## What is not supported
+
+- **Non-string keys** — mapping keys are always strings; `42: value` or `[1,2]: v` are not supported
+- **Custom tags** — `!!python/object`, `!mytag` and any tag other than the built-in Core Schema tags are ignored
+- **Directives** — `%YAML` and `%TAG` are not processed
+- **YAML 1.1 special types** — `!!set`, `!!omap`, `!!pairs`, `!!binary`, `!!timestamp`
+- **Tab indentation** — YAML forbids it; the parser expects spaces only
+- **Explicit keys** — block keys `? key\n: value` are not supported
