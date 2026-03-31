@@ -39,7 +39,7 @@ int main(void)
 	SECTION("block sequence at root");
 	root = YMLParse("- 1\n- 2\n- 3\n", .ok = &ok);
 	CHECK(ok == 0 && root && root->type == YML_ARRAY, "parse");
-	CHECK(ArrayLen(root->value.array) == 3, "length 3");
+	CHECK(YMLArrayLen(root->value.array) == 3, "length 3");
 	CHECK(root->value.array[0].value.integer == 1, "[0]");
 	CHECK(root->value.array[1].value.integer == 2, "[1]");
 	CHECK(root->value.array[2].value.integer == 3, "[2]");
@@ -50,7 +50,7 @@ int main(void)
 	CHECK(ok == 0, "parse");
 	v = YMLMapGet(root->value.object, "nums", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_ARRAY, "array type");
-	CHECK(ArrayLen(v->value.array) == 2, "length 2");
+	CHECK(YMLArrayLen(v->value.array) == 2, "length 2");
 	CHECK(v->value.array[0].value.integer == 10, "[0]=10");
 	CHECK(v->value.array[1].value.integer == 20, "[1]=20");
 	YMLDestroy(root);
@@ -58,7 +58,7 @@ int main(void)
 	SECTION("block sequence of mappings");
 	root = YMLParse("- name: Alice\n  age: 30\n- name: Bob\n  age: 25\n", .ok = &ok);
 	CHECK(ok == 0 && root && root->type == YML_ARRAY, "parse");
-	CHECK(ArrayLen(root->value.array) == 2, "2 items");
+	CHECK(YMLArrayLen(root->value.array) == 2, "2 items");
 	YMLValue *alice = YMLMapGet(root->value.array[0].value.object, "name", .ok = &ok);
 	CHECK_CSTR(alice ? alice->value.string : NULL, "Alice", "Alice");
 	YMLValue *bob_age = YMLMapGet(root->value.array[1].value.object, "age", .ok = &ok);
@@ -101,7 +101,7 @@ int main(void)
 	CHECK(ok == 0, "parse");
 	v = YMLMapGet(root->value.object, "a", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_ARRAY, "type");
-	CHECK(ArrayLen(v->value.array) == 3, "length 3");
+	CHECK(YMLArrayLen(v->value.array) == 3, "length 3");
 	CHECK(v->value.array[0].value.integer == 1, "[0]");
 	CHECK(v->value.array[2].value.integer == 3, "[2]");
 	YMLDestroy(root);
@@ -109,7 +109,7 @@ int main(void)
 	SECTION("flow sequence at root");
 	root = YMLParse("[true, 42, hello]\n", .ok = &ok);
 	CHECK(ok == 0 && root && root->type == YML_ARRAY, "parse");
-	CHECK(ArrayLen(root->value.array) == 3, "length 3");
+	CHECK(YMLArrayLen(root->value.array) == 3, "length 3");
 	CHECK(root->value.array[0].type == YML_BOOL, "[0] bool");
 	CHECK(root->value.array[1].type == YML_INT, "[1] int");
 	CHECK(root->value.array[2].type == YML_STRING, "[2] string");
@@ -120,7 +120,7 @@ int main(void)
 	CHECK(ok == 0, "parse");
 	v = YMLMapGet(root->value.object, "a", .ok = &ok);
 	x = YMLMapGet(v->value.object, "x", .ok = &ok);
-	CHECK(ok == 0 && x && x->type == YML_ARRAY && ArrayLen(x->value.array) == 2, "nested array");
+	CHECK(ok == 0 && x && x->type == YML_ARRAY && YMLArrayLen(x->value.array) == 2, "nested array");
 	y = YMLMapGet(v->value.object, "y", .ok = &ok);
 	CHECK(ok == 0 && y && y->type == YML_OBJECT, "nested object");
 	YMLValue *z = YMLMapGet(y->value.object, "z", .ok = &ok);

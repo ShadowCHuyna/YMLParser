@@ -15,7 +15,7 @@ int main(void) {
 	printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
 
 	YMLValue *tags = YMLMapGet(root->value.object, "tags");
-	for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
+	for (size_t i = 0; i < YMLArrayLen(tags->value.array); i++)
 		printf("tag: %s\n", tags->value.array[i].value.string);
 
 	YMLMapForech(root->value.object, key, val)

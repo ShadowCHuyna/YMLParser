@@ -106,7 +106,7 @@ int main(void)
 	SECTION("stream 2 docs");
 	YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok = &ok);
 	CHECK(ok == 0 && docs, "parse");
-	CHECK(ArrayLen(docs) == 2, "2 documents");
+	CHECK(YMLArrayLen(docs) == 2, "2 documents");
 	v = YMLMapGet(docs[0]->value.object, "foo", .ok = &ok);
 	CHECK(ok == 0 && v && v->value.integer == 1, "doc[0].foo");
 	v = YMLMapGet(docs[1]->value.object, "bar", .ok = &ok);
@@ -115,7 +115,7 @@ int main(void)
 
 	SECTION("stream without ---");
 	docs = YMLParseStream("x: 1\n", .ok = &ok);
-	CHECK(ok == 0 && docs && ArrayLen(docs) == 1, "single doc without ---");
+	CHECK(ok == 0 && docs && YMLArrayLen(docs) == 1, "single doc without ---");
 	YMLDestroyStream(docs);
 
 	TEST_REPORT();

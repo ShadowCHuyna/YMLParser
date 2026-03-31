@@ -156,14 +156,14 @@ int main(void)
 	YMLDestroy(root);
 
 	/* ═══════════════════════════════════════════════════════════════════
-	 * 7. ArrayLen(NULL) безопасен — возвращает 0
+	 * 7. YMLArrayLen(NULL) безопасен — возвращает 0
 	 * ═══════════════════════════════════════════════════════════════════ */
-	printf("\n=== 7. ArrayLen(NULL) ===\n");
-	printf("  ArrayLen(NULL) = %zu  (безопасно, не UB)\n", ArrayLen(NULL));
+	printf("\n=== 7. YMLArrayLen(NULL) ===\n");
+	printf("  YMLArrayLen(NULL) = %zu  (безопасно, не UB)\n", YMLArrayLen(NULL));
 
 	root = YMLParse("items: []\n");
 	YMLValue *items = YMLMapGet(root->value.object, "items");
-	printf("  ArrayLen([]) = %zu\n", ArrayLen(items->value.array));
+	printf("  YMLArrayLen([]) = %zu\n", YMLArrayLen(items->value.array));
 	YMLDestroy(root);
 
 	return 0;

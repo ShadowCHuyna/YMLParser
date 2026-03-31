@@ -72,8 +72,8 @@ int main(void)
 		return 1;
 	}
 
-	printf("Получено документов: %zu\n", ArrayLen(docs));
-	for (size_t i = 0; i < ArrayLen(docs); i++)
+	printf("Получено документов: %zu\n", YMLArrayLen(docs));
+	for (size_t i = 0; i < YMLArrayLen(docs); i++)
 	{
 		printf("Документ %zu:\n", i + 1);
 		YMLValue *type = YMLMapGet(docs[i]->value.object, "type", .ok = &ok);
@@ -104,7 +104,7 @@ int main(void)
 	else
 	{
 		printf("Документов: %zu (якоря не утекли между документами)\n",
-			   ArrayLen(docs));
+			   YMLArrayLen(docs));
 	}
 	/* docs может содержать частично разобранные документы — освобождаем всегда. */
 	if (docs)
@@ -125,8 +125,8 @@ int main(void)
 		YMLErrorPrint();
 		return 1;
 	}
-	printf("Получено документов: %zu\n", ArrayLen(docs));
-	for (size_t i = 0; i < ArrayLen(docs); i++)
+	printf("Получено документов: %zu\n", YMLArrayLen(docs));
+	for (size_t i = 0; i < YMLArrayLen(docs); i++)
 	{
 		YMLMapForech(docs[i]->value.object, key, val)
 			printf("  [%zu] %s = %s\n", i + 1, key, val->value.string);

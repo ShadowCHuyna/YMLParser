@@ -85,7 +85,7 @@ static void print_value(const YMLValue *v, int indent)
 	case YML_ARRAY:
 	{
 		printf("[\n");
-		for (size_t i = 0; i < ArrayLen(v->value.array); i++)
+		for (size_t i = 0; i < YMLArrayLen(v->value.array); i++)
 		{
 			printf("%*s  [%zu] ", indent, "", i);
 			print_value(&v->value.array[i], indent + 4);
@@ -131,7 +131,7 @@ int main(void)
 		return 1;
 	}
 
-	for (size_t i = 0; i < ArrayLen(services->value.array); i++)
+	for (size_t i = 0; i < YMLArrayLen(services->value.array); i++)
 	{
 		YMLValue *svc = &services->value.array[i];
 		if (svc->type != YML_OBJECT)
@@ -161,7 +161,7 @@ int main(void)
 		YMLValue *routes = YMLMapGet(svc->value.object, "routes", .ok = &ok);
 		if (ok == 0 && routes->type == YML_ARRAY)
 		{
-			for (size_t r = 0; r < ArrayLen(routes->value.array); r++)
+			for (size_t r = 0; r < YMLArrayLen(routes->value.array); r++)
 			{
 				YMLValue *route = &routes->value.array[r];
 				YMLValue *path = YMLMapGet(route->value.object, "path", .ok = &ok);
@@ -194,7 +194,7 @@ int main(void)
 	YMLValue *replicas = YMLMapGet(db->value.object, "replicas", .ok = &ok);
 	if (ok == 0)
 	{
-		for (size_t i = 0; i < ArrayLen(replicas->value.array); i++)
+		for (size_t i = 0; i < YMLArrayLen(replicas->value.array); i++)
 		{
 			YMLValue *r = &replicas->value.array[i];
 			YMLValue *rh = YMLMapGet(r->value.object, "host", .ok = &ok);

@@ -16,7 +16,7 @@ A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define 
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
    - [YMLMapForech](#ymlmapforech)
-   - [ArrayLen](#arraylen)
+   - [YMLArrayLen](#YMLArrayLen)
    - [YMLErrorPrint](#ymlerrorprint)
 3. [Error handling](#error-handling)
 4. [Build](#build)
@@ -44,7 +44,7 @@ int main(void) {
     printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
 
     YMLValue *tags = YMLMapGet(root->value.object, "tags");
-    for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
+    for (size_t i = 0; i < YMLArrayLen(tags->value.array); i++)
         printf("tag: %s\n", tags->value.array[i].value.string);
 
     YMLMapForech(root->value.object, key, val)
@@ -75,7 +75,7 @@ typedef enum {
     YML_INT,          // value.integer  (int64_t) — dec / 0xFF / 0o17
     YML_FLOAT,        // value.number   (double)  — 3.14 / .inf / .nan
     YML_STRING,       // value.string   (const char*, owned)
-    YML_ARRAY,        // value.array    (YMLValue*, da, see ArrayLen)
+    YML_ARRAY,        // value.array    (YMLValue*, da, see YMLArrayLen)
     YML_OBJECT,       // value.object   (void*, access via YMLMapGet/YMLMapForech)
 } YMLValueType;
 
@@ -121,11 +121,11 @@ if (ok != 0) fprintf(stderr, "error %d: %s\n", ok, err);
 YMLValue **YMLParseStream(const char *yml_str, ...options...);
 ```
 
-Parses a YAML stream of multiple documents separated by `---`. Returns `da<YMLValue*>` — an array of root nodes. Use `ArrayLen` to get the count. Anchors do not survive document boundaries (`---` / `...`).
+Parses a YAML stream of multiple documents separated by `---`. Returns `da<YMLValue*>` — an array of root nodes. Use `YMLArrayLen` to get the count. Anchors do not survive document boundaries (`---` / `...`).
 
 ```c
 YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok=&ok);
-for (size_t i = 0; i < ArrayLen(docs); i++) { /* docs[i] */ }
+for (size_t i = 0; i < YMLArrayLen(docs); i++) { /* docs[i] */ }
 YMLDestroyStream(docs);
 ```
 
@@ -187,17 +187,17 @@ Iteration order is unspecified (open-addressing hash map).
 
 ---
 
-### ArrayLen
+### YMLArrayLen
 
 ```c
-size_t ArrayLen(YMLValue *array);
+size_t YMLArrayLen(YMLValue *array);
 ```
 
 Returns the number of elements in a `YML_ARRAY`. Returns `0` safely for `NULL`.
 
 ```c
 YMLValue *arr = YMLMapGet(root->value.object, "items");
-for (size_t i = 0; i < ArrayLen(arr->value.array); i++)
+for (size_t i = 0; i < YMLArrayLen(arr->value.array); i++)
     printf("[%zu] = %lld\n", i, (long long)arr->value.array[i].value.integer);
 ```
 

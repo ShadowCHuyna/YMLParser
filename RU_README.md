@@ -14,7 +14,7 @@
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
    - [YMLMapForech](#ymlmapforech)
-   - [ArrayLen](#arraylen)
+   - [YMLArrayLen](#YMLArrayLen)
    - [YMLErrorPrint](#ymlerrorprint)
 3. [Обработка ошибок](#обработка-ошибок)
 4. [Сборка](#сборка)
@@ -42,7 +42,7 @@ int main(void) {
     printf("name=%s  age=%lld\n", name->value.string, (long long)age->value.integer);
 
     YMLValue *tags = YMLMapGet(root->value.object, "tags");
-    for (size_t i = 0; i < ArrayLen(tags->value.array); i++)
+    for (size_t i = 0; i < YMLArrayLen(tags->value.array); i++)
         printf("tag: %s\n", tags->value.array[i].value.string);
 
     YMLMapForech(root->value.object, key, val)
@@ -73,7 +73,7 @@ typedef enum {
     YML_INT,          // value.integer  (int64_t) — dec / 0xFF / 0o17
     YML_FLOAT,        // value.number   (double)  — 3.14 / .inf / .nan
     YML_STRING,       // value.string   (const char*, владеет память)
-    YML_ARRAY,        // value.array    (YMLValue*, da, см. ArrayLen)
+    YML_ARRAY,        // value.array    (YMLValue*, da, см. YMLArrayLen)
     YML_OBJECT,       // value.object   (void*, доступ через YMLMapGet/YMLMapForech)
 } YMLValueType;
 
@@ -119,11 +119,11 @@ if (ok != 0) fprintf(stderr, "error %d: %s\n", ok, err);
 YMLValue **YMLParseStream(const char *yml_str, ...options...);
 ```
 
-Разбирает YAML-поток из нескольких документов, разделённых `---`. Возвращает `da<YMLValue*>` — массив корневых узлов. Длину массива получить через `ArrayLen`. Якоря не переживают границу документа (`---` / `...`).
+Разбирает YAML-поток из нескольких документов, разделённых `---`. Возвращает `da<YMLValue*>` — массив корневых узлов. Длину массива получить через `YMLArrayLen`. Якоря не переживают границу документа (`---` / `...`).
 
 ```c
 YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok=&ok);
-for (size_t i = 0; i < ArrayLen(docs); i++) { /* docs[i] */ }
+for (size_t i = 0; i < YMLArrayLen(docs); i++) { /* docs[i] */ }
 YMLDestroyStream(docs);
 ```
 
@@ -185,17 +185,17 @@ YMLMapForech(root->value.object, key, val) {
 
 ---
 
-### ArrayLen
+### YMLArrayLen
 
 ```c
-size_t ArrayLen(YMLValue *array);
+size_t YMLArrayLen(YMLValue *array);
 ```
 
 Возвращает количество элементов в `YML_ARRAY`. Для `NULL` безопасно возвращает `0`.
 
 ```c
 YMLValue *arr = YMLMapGet(root->value.object, "items");
-for (size_t i = 0; i < ArrayLen(arr->value.array); i++)
+for (size_t i = 0; i < YMLArrayLen(arr->value.array); i++)
     printf("[%zu] = %lld\n", i, (long long)arr->value.array[i].value.integer);
 ```
 

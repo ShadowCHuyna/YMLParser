@@ -66,11 +66,11 @@ int main(void)
 	}
 	CHECK(found_n, "found n=42 in foreach");
 
-	/* ── ArrayLen ─────────────────────────────────────────────────── */
-	SECTION("ArrayLen");
+	/* ── YMLArrayLen ─────────────────────────────────────────────────── */
+	SECTION("YMLArrayLen");
 	v = YMLMapGet(root->value.object, "arr", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_ARRAY, "arr is array");
-	CHECK(ArrayLen(v->value.array) == 3, "len=3");
+	CHECK(YMLArrayLen(v->value.array) == 3, "len=3");
 	CHECK(v->value.array[0].value.integer == 1, "[0]=1");
 	CHECK(v->value.array[1].value.integer == 2, "[1]=2");
 	CHECK(v->value.array[2].value.integer == 3, "[2]=3");
@@ -87,9 +87,9 @@ int main(void)
 	CHECK(1, "no crash");
 
 	/* ── YMLParseStream ───────────────────────────────────────────── */
-	SECTION("YMLParseStream ArrayLen");
+	SECTION("YMLParseStream YMLArrayLen");
 	YMLValue **docs = YMLParseStream("---\n1\n---\n2\n---\n3\n", .ok = &ok);
-	CHECK(ok == 0 && docs && ArrayLen(docs) == 3, "3 documents");
+	CHECK(ok == 0 && docs && YMLArrayLen(docs) == 3, "3 documents");
 	CHECK(docs[0]->value.integer == 1, "doc[0]=1");
 	CHECK(docs[1]->value.integer == 2, "doc[1]=2");
 	CHECK(docs[2]->value.integer == 3, "doc[2]=3");

@@ -33,7 +33,7 @@
  *   YML_FLOAT   double   (floats: 3.14, .inf, .nan)
  *   YML_STRING  const char* (heap-allocated, NUL-terminated, owned by YMLValue)
  *   YML_OBJECT  hm<str, YMLValue>  — access via YMLMapGet / YMLMapForech
- *   YML_ARRAY   da<YMLValue>       — index with value.array[i], length via ArrayLen
+ *   YML_ARRAY   da<YMLValue>       — index with value.array[i], length via YMLArrayLen
  *
  * YML_ANY — sentinel only for _YMLOptionals.type (means "skip type check").
  *           Not a valid node type.
@@ -59,7 +59,7 @@ typedef enum YMLValueType
  *   YML_FLOAT  → value.number
  *   YML_STRING → value.string  (pointer to a NUL-terminated string)
  *   YML_OBJECT → value.object  (hm<str → YMLValue>)
- *   YML_ARRAY  → value.array   (da<YMLValue>, hidden header, see ArrayLen)
+ *   YML_ARRAY  → value.array   (da<YMLValue>, hidden header, see YMLArrayLen)
  *   YML_NULL   → value is unused
  */
 typedef struct YMLValue
@@ -72,7 +72,7 @@ typedef struct YMLValue
 		double number;
 		const char *string;
 		void *object;			// _hm* — opaque pointer, access via YMLMapGet/YMLMapForech
-		struct YMLValue *array; // da<YMLValue> — direct indexing arr[i], length via ArrayLen
+		struct YMLValue *array; // da<YMLValue> — direct indexing arr[i], length via YMLArrayLen
 	} value;
 } YMLValue;
 
@@ -92,9 +92,9 @@ typedef struct
 
 /*
  * Returns the number of elements in a da array.
- * Example: for (size_t i = 0; i < ArrayLen(arr); i++) { ... arr[i] ... }
+ * Example: for (size_t i = 0; i < YMLArrayLen(arr); i++) { ... arr[i] ... }
  */
-#define ArrayLen(arr) ((arr) ? ((__da_header *)(arr) - 1)->len : (size_t)0)
+#define YMLArrayLen(arr) ((arr) ? ((__da_header *)(arr) - 1)->len : (size_t)0)
 
 struct _YMLOptionals
 {
@@ -119,11 +119,11 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals);
 /*
  * Parses a YAML stream with multiple documents (separated by ---).
  * Returns da<YMLValue*> — an array of root nodes, one per document.
- * Get the length via ArrayLen.
+ * Get the length via YMLArrayLen.
  *
  * Example:
  *   YMLValue **docs = YMLParseStream(yml_str);
- *   for (size_t i = 0; i < ArrayLen(docs); i++) { ... docs[i] ... }
+ *   for (size_t i = 0; i < YMLArrayLen(docs); i++) { ... docs[i] ... }
  *   YMLDestroyStream(docs);
  *
  * Error codes for ok: same as YMLParse.
@@ -210,8 +210,8 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
  *                ^
  *                пользователю возвращается указатель сюда
  *
- * _da_hdr содержит len и cap — пользователь видит только len через ArrayLen().
- * Массив нельзя изменять снаружи — только читать через [i] и ArrayLen.
+ * _da_hdr содержит len и cap — пользователь видит только len через YMLArrayLen().
+ * Массив нельзя изменять снаружи — только читать через [i] и YMLArrayLen.
  * Освобождение: _da_free(da).
  */
 
@@ -245,7 +245,7 @@ YML_PRIVATE void _da_free(void *da);
  *
  * da_new(T, cap)      — выделить новый da<T> с ёмкостью cap
  * da_push(da, val)    — добавить val в конец, обновить da
- * da_len(da)          — длина (то же что ArrayLen)
+ * da_len(da)          — длина (то же что YMLArrayLen)
  * da_free(da)         — освободить
  *
  * Пример:
