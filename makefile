@@ -53,6 +53,10 @@ $(BUILD)/test_%: tests/test_%.c $(OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc -Itests $(LDFLAGS) -o $@ $^
 
 # ── примеры ───────────────────────────────────────────────────────────
+# Пример с многопоточностью требует -lpthread (только Linux/macOS).
+$(BUILD)/example_threads: examples/example_threads.c $(OBJ) | $(BUILD)
+	$(CC) $(CFLAGS) -Isrc $(LDFLAGS) -lpthread -o $@ $^
+
 $(BUILD)/%: examples/%.c $(OBJ) | $(BUILD)
 	$(CC) $(CFLAGS) -Isrc $(LDFLAGS) -o $@ $^
 
