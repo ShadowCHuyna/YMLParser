@@ -5,9 +5,10 @@
  *   make run-example E=example_errors
  */
 
+#define YMLPARSER_IMPLEMENTATION
+#include "YMLParser.h"
 #include <stdio.h>
 #include <string.h>
-#include "YMLParser.h"
 
 /* ── helpers ── */
 static const char *type_name(YMLValueType t)

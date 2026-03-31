@@ -1,3 +1,4 @@
+#define YMLPARSER_IMPLEMENTATION
 #include "YMLParser.h"
 #include <stdio.h>
 

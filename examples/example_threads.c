@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#define YMLPARSER_IMPLEMENTATION
 #include "YMLParser.h"
 
 #define NTHREADS 6

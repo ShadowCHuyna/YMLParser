@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#define YMLPARSER_IMPLEMENTATION
 #include "YMLParser.h"
 
 /* ─────────────────────────────────────────────────────────────────────

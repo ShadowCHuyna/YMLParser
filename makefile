@@ -26,9 +26,15 @@ else
     SHARED_CMD = $(CC) -shared -fPIC -o $(LIB_SHARED) $(OBJ_PIC) $(LDFLAGS)
 endif
 
-.PHONY: all test clean run-test run-example lib-static lib-shared
+.PHONY: all single-header check-header test clean run-test run-example lib-static lib-shared
 
-all: $(EXAMPLES)
+all: single-header
+
+single-header:
+	python3 tools/amalgamate.py
+
+check-header:
+	python3 tools/amalgamate.py --check
 
 # ── объектники библиотеки ─────────────────────────────────────────────
 $(BUILD)/%.o: src/%.c | $(BUILD)

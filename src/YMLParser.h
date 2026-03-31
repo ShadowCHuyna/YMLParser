@@ -67,13 +67,13 @@ typedef struct
 {
 	size_t len;
 	size_t cap;
-} _da_header; /* должен совпадать с _da_hdr из _da.h */
+} __da_header; /* должен совпадать с _da_hdr из _da.h */
 
 /*
  * Возвращает количество элементов в da-массиве.
  * Пример: for (size_t i = 0; i < ArrayLen(arr); i++) { ... arr[i] ... }
  */
-#define ArrayLen(arr) ((arr) ? ((_da_header *)(arr) - 1)->len : (size_t)0)
+#define ArrayLen(arr) ((arr) ? ((__da_header *)(arr) - 1)->len : (size_t)0)
 
 struct _YMLOptionals
 {
