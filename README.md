@@ -277,7 +277,6 @@ Regenerate `YMLParser.h` from `src/` after making changes:
 
 ```sh
 make              # runs tools/amalgamate.py → YMLParser.h
-make check-header # verify the header is up to date (for CI)
 ```
 
 ### Multi-file (for library development)

@@ -26,7 +26,7 @@ else
     SHARED_CMD = $(CC) -shared -fPIC -o $(LIB_SHARED) $(OBJ_PIC) $(LDFLAGS)
 endif
 
-.PHONY: all single-header check-header test clean run-test run-example lib-static lib-shared
+.PHONY: all single-header test clean run-test run-example lib-static lib-shared
 
 all: single-header
 

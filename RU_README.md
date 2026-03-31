@@ -275,7 +275,6 @@ gcc -std=c11 -o my_app my_app.c -lm
 
 ```sh
 make              # запускает tools/amalgamate.py → YMLParser.h
-make check-header # проверить что заголовок актуален (для CI)
 ```
 
 ### Multi-file (для разработки библиотеки)

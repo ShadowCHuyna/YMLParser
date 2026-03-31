@@ -16,8 +16,6 @@ tools/amalgamate.py — собирает YMLParser.h (single-header) из src/.
 
 import os
 import re
-import sys
-import argparse
 from datetime import date
 
 # ── пути ───────────────────────────────────────────────────────────────
@@ -78,7 +76,6 @@ def inline_file(path: str) -> str:
 
 # ── генерация ──────────────────────────────────────────────────────────
 
-SEPARATOR = "/* {name} {dashes} */\n"
 
 def separator(rel_path: str) -> str:
 	name = rel_path.replace("\\", "/")
@@ -148,29 +145,7 @@ def generate() -> str:
 # ── точка входа ────────────────────────────────────────────────────────
 
 def main():
-	parser = argparse.ArgumentParser(description=__doc__,
-										formatter_class=argparse.RawDescriptionHelpFormatter)
-	parser.add_argument("--check", action="store_true",
-						help="проверить актуальность YMLParser.h (для CI), "
-								"выйти с кодом 1 если файл устарел")
-	args = parser.parse_args()
-
 	result = generate()
-
-	if args.check:
-		if not os.path.exists(OUT):
-			print(f"FAIL: {OUT} не существует — запусти make single-header")
-			sys.exit(1)
-		with open(OUT, encoding="utf-8") as f:
-			current = f.read()
-		# Сравниваем без строки с датой (она меняется каждый день)
-		def strip_date(s):
-			return re.sub(r'Generated \d{4}-\d{2}-\d{2}', 'Generated DATE', s)
-		if strip_date(current) != strip_date(result):
-			print(f"FAIL: {OUT} устарел — запусти make single-header")
-			sys.exit(1)
-		print(f"OK: {os.path.relpath(OUT, ROOT)} актуален")
-		return
 
 	with open(OUT, "w", encoding="utf-8") as f:
 		f.write(result)
