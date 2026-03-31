@@ -2,7 +2,7 @@
 #include "_da.h"
 #include "_hm.h"
 #include "_lexer.h"
-#include "_yml_free.h"
+#include "_yml_utils.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -557,7 +557,7 @@ static YMLValue *yml_deep_copy(const YMLValue *src)
 		v->value = src->value;
 		break;
 	case YML_STRING:
-		v->value.string = src->value.string ? strdup(src->value.string) : NULL;
+		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
 		break;
 	case YML_ARRAY:
 	{
@@ -666,7 +666,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 			break;
 		}
 		v->type = YML_STRING;
-		v->value.string = strdup(buf);
+		v->value.string = yml_strdup(buf);
 		return;
 	}
 

@@ -14,6 +14,10 @@
 
 #include <stddef.h>
 
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
+
 typedef struct
 {
 	size_t len;
@@ -21,17 +25,17 @@ typedef struct
 } _da_hdr;
 
 /* Выделить новый da для элементов размером elem_size. */
-void *_da_new(size_t elem_size, size_t cap);
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap);
 
 /*
  * Добавить элемент (elem_size байт) в конец da.
  * Возвращает новый указатель на начало массива (может переаллоцироваться).
  * Вызывающий обязан обновить свой указатель.
  */
-void *_da_push(void *da, const void *elem, size_t elem_size);
+YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size);
 
 /* Освободить da вместе со скрытым заголовком. */
-void _da_free(void *da);
+YML_PRIVATE void _da_free(void *da);
 
 /*
  * Типизированные макросы.

@@ -1,6 +1,6 @@
 #include "_hm.h"
 #include "_da.h"
-#include "_yml_free.h"
+#include "_yml_utils.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,7 +28,7 @@ static size_t next_pow2(size_t n)
 	return n + 1;
 }
 
-_hm *hm_new(size_t cap)
+YML_PRIVATE _hm *hm_new(size_t cap)
 {
 	_hm *hm = malloc(sizeof(_hm));
 	if (!hm)
@@ -67,7 +67,7 @@ static bool hm_grow(_hm *hm)
 	return true;
 }
 
-bool hm_set(_hm *hm, const char *key, YMLValue value)
+YML_PRIVATE bool hm_set(_hm *hm, const char *key, YMLValue value)
 {
 	if (hm->len * 10 >= hm->cap * 7) /* load > 0.7 */
 		if (!hm_grow(hm))
@@ -83,7 +83,7 @@ bool hm_set(_hm *hm, const char *key, YMLValue value)
 		}
 		idx = (idx + 1) & (hm->cap - 1);
 	}
-	hm->entries[idx].key = strdup(key);
+	hm->entries[idx].key = yml_strdup(key);
 	if (!hm->entries[idx].key)
 		return false;
 	hm->entries[idx].value = value;
@@ -91,7 +91,7 @@ bool hm_set(_hm *hm, const char *key, YMLValue value)
 	return true;
 }
 
-YMLValue *hm_get(const _hm *hm, const char *key)
+YML_PRIVATE YMLValue *hm_get(const _hm *hm, const char *key)
 {
 	size_t idx = hash_str(key) & (hm->cap - 1);
 	while (hm->entries[idx].key)
@@ -103,7 +103,7 @@ YMLValue *hm_get(const _hm *hm, const char *key)
 	return NULL;
 }
 
-bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
+YML_PRIVATE bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
 {
 	while (*idx < hm->cap)
 	{
@@ -118,7 +118,7 @@ bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
 	return false;
 }
 
-void hm_free(_hm *hm)
+YML_PRIVATE void hm_free(_hm *hm)
 {
 	if (!hm)
 		return;

@@ -15,9 +15,6 @@
  *
  *   Компилятор: C11 или новее  (_Thread_local, <stdbool.h>, <stdint.h>)
  *   Флаги:      -lm            (HUGE_VAL / NAN из <math.h>)
- *   POSIX:      strdup требует _POSIX_C_SOURCE=200809L.
- *               Заголовок определяет его автоматически если не задан.
- *
  */
 #ifndef YMLPARSER_H
 #define YMLPARSER_H
@@ -203,6 +200,8 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 			for (YMLValue * (val_name) = NULL; _YMLMapIterNext(&_yml_it_, (const char **)&(key_name), &(val_name));)
 
 #ifdef YMLPARSER_IMPLEMENTATION
+/* YML_PRIVATE — скрывает внутренние функции. */
+#define YML_PRIVATE static
 /* ── src/_da.h ─────────────────────────────────────────────────── */
 /*
  * _da.h — dynamic array со скрытым заголовком.
@@ -219,6 +218,10 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 
 #include <stddef.h>
 
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
+
 typedef struct
 {
 	size_t len;
@@ -226,17 +229,17 @@ typedef struct
 } _da_hdr;
 
 /* Выделить новый da для элементов размером elem_size. */
-void *_da_new(size_t elem_size, size_t cap);
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap);
 
 /*
  * Добавить элемент (elem_size байт) в конец da.
  * Возвращает новый указатель на начало массива (может переаллоцироваться).
  * Вызывающий обязан обновить свой указатель.
  */
-void *_da_push(void *da, const void *elem, size_t elem_size);
+YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size);
 
 /* Освободить da вместе со скрытым заголовком. */
-void _da_free(void *da);
+YML_PRIVATE void _da_free(void *da);
 
 /*
  * Типизированные макросы.
@@ -277,6 +280,10 @@ void _da_free(void *da);
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
+
 typedef struct
 {
 	char *key; /* strdup, NULL = пустой слот */
@@ -291,14 +298,14 @@ typedef struct
 } _hm;
 
 /* Выделить новую hm. cap — начальное количество слотов (округляется до степени 2). */
-_hm *hm_new(size_t cap);
+YML_PRIVATE _hm *hm_new(size_t cap);
 
 /*
  * Вставить или обновить пару key → value.
  * key копируется через strdup.
  * Возвращает false при ошибке памяти.
  */
-bool hm_set(_hm *hm, const char *key, YMLValue value);
+YML_PRIVATE bool hm_set(_hm *hm, const char *key, YMLValue value);
 
 /*
  * Найти значение по ключу.
@@ -309,7 +316,7 @@ bool hm_set(_hm *hm, const char *key, YMLValue value);
  * если он вызывает перераспределение (load > 0.7). Не сохраняйте результат
  * за пределами текущего блока кода.
  */
-YMLValue *hm_get(const _hm *hm, const char *key);
+YML_PRIVATE YMLValue *hm_get(const _hm *hm, const char *key);
 
 /*
  * Итерация: idx — текущий индекс (начинать с 0).
@@ -321,13 +328,13 @@ YMLValue *hm_get(const _hm *hm, const char *key);
  *   const char *key; YMLValue *val;
  *   while (hm_next(hm, &idx, &key, &val)) { ... }
  */
-bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value);
+YML_PRIVATE bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value);
 
 /*
  * Рекурсивно освобождает все YMLValue внутри hm (строки, вложенные hm и da),
  * затем освобождает ключи и саму hm.
  */
-void hm_free(_hm *hm);
+YML_PRIVATE void hm_free(_hm *hm);
 
 /* ── src/_lexer.h ──────────────────────────────────────────────── */
 /*
@@ -349,8 +356,12 @@ void hm_free(_hm *hm);
  *  - комментарии (#) и незначимые пробелы пропускаются
  *  - строки TK_SCALAR для блочных (| и >) обрабатываются полностью в лексере
  */
-
+#include <stdbool.h>
 #include <stddef.h>
+
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
 
 typedef enum
 {
@@ -408,19 +419,33 @@ typedef struct
  *
  * Освобождение: da_free() — токены не владеют строками (value указывает в src).
  */
-Token *lex(const char *src, const char **error);
+YML_PRIVATE Token *lex(const char *src, const char **error);
 
-/* ── src/_yml_free.h ───────────────────────────────────────────── */
+/* ── src/_yml_utils.h ──────────────────────────────────────────── */
 /*
- * _yml_free.h — рекурсивное освобождение содержимого YMLValue.
+ * _yml_utils.h — рекурсивное освобождение содержимого YMLValue + утилиты.
  *
  * Единственный источник истины для логики обхода типов при free.
- * Включается в _hm.c и YMLParser.c; оба файла вызывают yml_value_free_impl.
+ * Включается в _hm.c и YMLParser.c.
  *
  * hm_free объявлена в _hm.h и определена в _hm.c; её вызов из inline-функции
  * разрешается на этапе компоновки.
  */
 
+#include <stdlib.h>
+#include <string.h>
+
+/*
+ * yml_strdup — портативная замена strdup (не требует POSIX / _POSIX_C_SOURCE).
+ */
+static inline char *yml_strdup(const char *s)
+{
+	size_t n = strlen(s) + 1;
+	char *copy = (char *)malloc(n);
+	if (copy)
+		memcpy(copy, s, n);
+	return copy;
+}
 
 static inline void yml_value_free_impl(YMLValue *v)
 {
@@ -451,7 +476,7 @@ static inline void yml_value_free_impl(YMLValue *v)
 #include <stdlib.h>
 #include <string.h>
 
-void *_da_new(size_t elem_size, size_t cap)
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap)
 {
 	if (cap == 0)
 		cap = 4;
@@ -463,7 +488,7 @@ void *_da_new(size_t elem_size, size_t cap)
 	return hdr + 1;
 }
 
-void *_da_push(void *da, const void *elem, size_t elem_size)
+YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size)
 {
 	_da_hdr *hdr = (_da_hdr *)da - 1;
 	if (hdr->len == hdr->cap)
@@ -480,7 +505,7 @@ void *_da_push(void *da, const void *elem, size_t elem_size)
 	return hdr + 1;
 }
 
-void _da_free(void *da)
+YML_PRIVATE void _da_free(void *da)
 {
 	if (!da)
 		return;
@@ -515,7 +540,7 @@ static size_t next_pow2(size_t n)
 	return n + 1;
 }
 
-_hm *hm_new(size_t cap)
+YML_PRIVATE _hm *hm_new(size_t cap)
 {
 	_hm *hm = malloc(sizeof(_hm));
 	if (!hm)
@@ -554,7 +579,7 @@ static bool hm_grow(_hm *hm)
 	return true;
 }
 
-bool hm_set(_hm *hm, const char *key, YMLValue value)
+YML_PRIVATE bool hm_set(_hm *hm, const char *key, YMLValue value)
 {
 	if (hm->len * 10 >= hm->cap * 7) /* load > 0.7 */
 		if (!hm_grow(hm))
@@ -570,7 +595,7 @@ bool hm_set(_hm *hm, const char *key, YMLValue value)
 		}
 		idx = (idx + 1) & (hm->cap - 1);
 	}
-	hm->entries[idx].key = strdup(key);
+	hm->entries[idx].key = yml_strdup(key);
 	if (!hm->entries[idx].key)
 		return false;
 	hm->entries[idx].value = value;
@@ -578,7 +603,7 @@ bool hm_set(_hm *hm, const char *key, YMLValue value)
 	return true;
 }
 
-YMLValue *hm_get(const _hm *hm, const char *key)
+YML_PRIVATE YMLValue *hm_get(const _hm *hm, const char *key)
 {
 	size_t idx = hash_str(key) & (hm->cap - 1);
 	while (hm->entries[idx].key)
@@ -590,7 +615,7 @@ YMLValue *hm_get(const _hm *hm, const char *key)
 	return NULL;
 }
 
-bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
+YML_PRIVATE bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
 {
 	while (*idx < hm->cap)
 	{
@@ -605,7 +630,7 @@ bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
 	return false;
 }
 
-void hm_free(_hm *hm)
+YML_PRIVATE void hm_free(_hm *hm)
 {
 	if (!hm)
 		return;
@@ -1229,7 +1254,7 @@ static Token lex_tag(Lexer *l)
 
 /* ── главный цикл лексера ──────────────────────────────────────────── */
 
-Token *lex(const char *src, const char **error_out)
+YML_PRIVATE Token *lex(const char *src, const char **error_out)
 {
 	/* Транскодировать UTF-16/32 → UTF-8 если необходимо. */
 	const char *use_src = src;
@@ -1993,7 +2018,7 @@ static YMLValue *yml_deep_copy(const YMLValue *src)
 		v->value = src->value;
 		break;
 	case YML_STRING:
-		v->value.string = src->value.string ? strdup(src->value.string) : NULL;
+		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
 		break;
 	case YML_ARRAY:
 	{
@@ -2102,7 +2127,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 			break;
 		}
 		v->type = YML_STRING;
-		v->value.string = strdup(buf);
+		v->value.string = yml_strdup(buf);
 		return;
 	}
 

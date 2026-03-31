@@ -609,7 +609,7 @@ static Token lex_tag(Lexer *l)
 
 /* ── главный цикл лексера ──────────────────────────────────────────── */
 
-Token *lex(const char *src, const char **error_out)
+YML_PRIVATE Token *lex(const char *src, const char **error_out)
 {
 	/* Транскодировать UTF-16/32 → UTF-8 если необходимо. */
 	const char *use_src = src;

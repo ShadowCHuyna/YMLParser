@@ -35,7 +35,7 @@ IMPL_FILES = [
     os.path.join(SRC, "_da.h"),
     os.path.join(SRC, "_hm.h"),
     os.path.join(SRC, "_lexer.h"),
-    os.path.join(SRC, "_yml_free.h"),
+    os.path.join(SRC, "_yml_utils.h"),
     os.path.join(SRC, "_da.c"),
     os.path.join(SRC, "_hm.c"),
     os.path.join(SRC, "_lexer.c"),
@@ -48,7 +48,7 @@ STRIP_INCLUDES = {
     '#include "_da.h"',
     '#include "_hm.h"',
     '#include "_lexer.h"',
-    '#include "_yml_free.h"',
+    '#include "_yml_utils.h"',
 }
 
 # ── обработка одного файла ─────────────────────────────────────────────
@@ -109,9 +109,6 @@ def generate() -> str:
  *
  *   Компилятор: C11 или новее  (_Thread_local, <stdbool.h>, <stdint.h>)
  *   Флаги:      -lm            (HUGE_VAL / NAN из <math.h>)
- *   POSIX:      strdup требует _POSIX_C_SOURCE=200809L.
- *               Заголовок определяет его автоматически если не задан.
- *
  */
 """)
 
@@ -122,16 +119,14 @@ def generate() -> str:
 
     parts.append("#ifndef YMLPARSER_H\n#define YMLPARSER_H\n\n")
     parts.append("/* ════════════════════════ PUBLIC API ════════════════════════ */\n\n")
-    parts.append(
-        "/* strdup требует POSIX — определяем если не задан снаружи */\n"
-        "#ifndef _POSIX_C_SOURCE\n"
-        "#  define _POSIX_C_SOURCE 200809L\n"
-        "#endif\n\n"
-    )
     parts.append(public_api.rstrip("\n") + "\n\n")
 
     # ── блок реализации ────────────────────────────────────────────────
     parts.append("#ifdef YMLPARSER_IMPLEMENTATION\n")
+    parts.append(
+        "/* YML_PRIVATE — скрывает внутренние функции. */\n"
+        "#define YML_PRIVATE static\n"
+    )
 
     # _POSIX_C_SOURCE нужен до системных <include> для strdup
 

@@ -33,8 +33,6 @@ all: single-header
 single-header:
 	python3 tools/amalgamate.py
 
-check-header:
-	python3 tools/amalgamate.py --check
 
 # ── объектники библиотеки ─────────────────────────────────────────────
 $(BUILD)/%.o: src/%.c | $(BUILD)

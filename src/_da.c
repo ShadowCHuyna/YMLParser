@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void *_da_new(size_t elem_size, size_t cap)
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap)
 {
 	if (cap == 0)
 		cap = 4;
@@ -14,7 +14,7 @@ void *_da_new(size_t elem_size, size_t cap)
 	return hdr + 1;
 }
 
-void *_da_push(void *da, const void *elem, size_t elem_size)
+YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size)
 {
 	_da_hdr *hdr = (_da_hdr *)da - 1;
 	if (hdr->len == hdr->cap)
@@ -31,7 +31,7 @@ void *_da_push(void *da, const void *elem, size_t elem_size)
 	return hdr + 1;
 }
 
-void _da_free(void *da)
+YML_PRIVATE void _da_free(void *da)
 {
 	if (!da)
 		return;

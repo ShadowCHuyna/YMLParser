@@ -18,8 +18,12 @@
  *  - комментарии (#) и незначимые пробелы пропускаются
  *  - строки TK_SCALAR для блочных (| и >) обрабатываются полностью в лексере
  */
-
+#include <stdbool.h>
 #include <stddef.h>
+
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
 
 typedef enum
 {
@@ -77,4 +81,4 @@ typedef struct
  *
  * Освобождение: da_free() — токены не владеют строками (value указывает в src).
  */
-Token *lex(const char *src, const char **error);
+YML_PRIVATE Token *lex(const char *src, const char **error);
