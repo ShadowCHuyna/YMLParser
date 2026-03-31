@@ -2,6 +2,7 @@
 #include "_da.h"
 #include "_hm.h"
 #include "_lexer.h"
+#include "_yml_free.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,8 +14,8 @@
 
 /* ── глобальное состояние последней ошибки ─────────────────────────── */
 
-static int g_ok;
-static char g_error[256];
+static _Thread_local int g_ok;
+static _Thread_local char g_error[256];
 
 static void set_error(int code, const char *msg)
 {
@@ -733,15 +734,20 @@ static YMLValue *parse_scalar(Parser *p)
 			memcpy((char *)v->value.string, t->value, t->value_len);
 			((char *)v->value.string)[t->value_len] = '\0';
 		}
-		/* блочный скаляр: лексер выделил буфер — освобождаем его */
-		free((char *)t->value);
-		t->value = NULL;
+		if (t->owns_value)
+		{
+			free((char *)t->value);
+			t->value = NULL;
+		}
 		break;
 	case SCALAR_FOLDED:
 		v->type = YML_STRING;
 		v->value.string = fold_scalar(t->value, t->value_len);
-		free((char *)t->value);
-		t->value = NULL;
+		if (t->owns_value)
+		{
+			free((char *)t->value);
+			t->value = NULL;
+		}
 		break;
 	}
 	return v;
@@ -1130,6 +1136,8 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 		if (p.ok)
 		{
 			set_error(p.ok, p.error);
+			if (doc)
+				_YMLDestroy(doc, (struct _YMLOptionals){0});
 			break;
 		}
 		da_push(docs, doc);
@@ -1185,7 +1193,9 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals)
 	if (p.ok != 0)
 	{
 		set_error(p.ok, p.error);
-		root = NULL; /* TODO: освободить частично построенное дерево */
+		if (root)
+			_YMLDestroy(root, (struct _YMLOptionals){0});
+		root = NULL;
 	}
 
 	/* освободить имена и deep-copy ноды якорей */
@@ -1204,37 +1214,11 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals)
 	return root;
 }
 
-/* Рекурсивно освободить одно значение (не сам указатель root). */
-static void yml_value_free(YMLValue *v)
-{
-	if (!v)
-		return;
-	switch (v->type)
-	{
-	case YML_STRING:
-		free((char *)v->value.string);
-		break;
-	case YML_ARRAY:
-	{
-		size_t n = da_len(v->value.array);
-		for (size_t i = 0; i < n; i++)
-			yml_value_free(&v->value.array[i]);
-		da_free(v->value.array);
-		break;
-	}
-	case YML_OBJECT:
-		hm_free((_hm *)v->value.object);
-		break;
-	default:
-		break;
-	}
-}
-
 void _YMLDestroy(YMLValue *root, struct _YMLOptionals optionals)
 {
 	if (!root)
 		return;
-	yml_value_free(root);
+	yml_value_free_impl(root);
 	free(root);
 	if (optionals.ok)
 		*optionals.ok = 0;

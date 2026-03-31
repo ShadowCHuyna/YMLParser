@@ -19,10 +19,12 @@ void *_da_push(void *da, const void *elem, size_t elem_size)
 	_da_hdr *hdr = (_da_hdr *)da - 1;
 	if (hdr->len == hdr->cap)
 	{
-		hdr->cap *= 2;
-		hdr = realloc(hdr, sizeof(_da_hdr) + elem_size * hdr->cap);
-		if (!hdr)
-			return da; /* TODO: propagate OOM */
+		size_t new_cap = hdr->cap * 2;
+		_da_hdr *new_hdr = realloc(hdr, sizeof(_da_hdr) + elem_size * new_cap);
+		if (!new_hdr)
+			return NULL; /* старый блок жив, cap не тронут */
+		new_hdr->cap = new_cap;
+		hdr = new_hdr;
 	}
 	memcpy((char *)(hdr + 1) + elem_size * hdr->len, elem, elem_size);
 	hdr->len++;

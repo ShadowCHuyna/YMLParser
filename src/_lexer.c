@@ -312,8 +312,9 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 	/* '+' — оставить как есть */
 
 	buf[buf_len] = '\0';
-	t.value = buf; /* парсер освобождает этот буфер после strdup в YMLValue */
+	t.value = buf;
 	t.value_len = buf_len;
+	t.owns_value = true;
 	return t;
 }
 

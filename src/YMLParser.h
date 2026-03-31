@@ -73,7 +73,7 @@ typedef struct
  * Возвращает количество элементов в da-массиве.
  * Пример: for (size_t i = 0; i < ArrayLen(arr); i++) { ... arr[i] ... }
  */
-#define ArrayLen(arr) (((_da_header *)(arr) - 1)->len)
+#define ArrayLen(arr) ((arr) ? ((_da_header *)(arr) - 1)->len : (size_t)0)
 
 struct _YMLOptionals
 {

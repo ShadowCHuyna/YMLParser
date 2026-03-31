@@ -1,5 +1,6 @@
 #include "_hm.h"
 #include "_da.h"
+#include "_yml_free.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -117,32 +118,6 @@ bool hm_next(const _hm *hm, size_t *idx, const char **key, YMLValue **value)
 	return false;
 }
 
-/* Рекурсивное освобождение значения (без free самого указателя) */
-static void free_value(YMLValue *v)
-{
-	if (!v)
-		return;
-	switch (v->type)
-	{
-	case YML_STRING:
-		free((char *)v->value.string);
-		break;
-	case YML_ARRAY:
-	{
-		size_t n = da_len(v->value.array);
-		for (size_t i = 0; i < n; i++)
-			free_value(&v->value.array[i]);
-		da_free(v->value.array);
-		break;
-	}
-	case YML_OBJECT:
-		hm_free((_hm *)v->value.object);
-		break;
-	default:
-		break;
-	}
-}
-
 void hm_free(_hm *hm)
 {
 	if (!hm)
@@ -152,7 +127,7 @@ void hm_free(_hm *hm)
 		if (!hm->entries[i].key)
 			continue;
 		free(hm->entries[i].key);
-		free_value(&hm->entries[i].value);
+		yml_value_free_impl(&hm->entries[i].value);
 	}
 	free(hm->entries);
 	free(hm);

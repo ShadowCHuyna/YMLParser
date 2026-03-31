@@ -66,6 +66,7 @@ typedef struct
 	size_t value_len;
 
 	ScalarStyle style; /* только для TK_SCALAR */
+	bool owns_value;   /* true = value указывает на malloc-буфер лексера, парсер обязан free() */
 } Token;
 
 /*
