@@ -80,6 +80,7 @@ struct _YMLOptionals
 	int *ok;		   // 0 — no error, otherwise error code
 	char **error;	   // *error points to a buffer with the error message
 	YMLValueType type; // for YMLMapGet: expected type (YML_ANY — skip check)
+	char splitter;	   // for YMLMapGet: if non-zero, split key by this char and traverse nested objects
 };
 
 /*
@@ -147,7 +148,7 @@ int YMLErrorPrint(void);
 YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
 
 #define YMLMapGet(object, key, ...) \
-	_YMLMapGet(object, key, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, __VA_ARGS__})
+	_YMLMapGet(object, key, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, .splitter = 0, __VA_ARGS__})
 
 /*
  * Iterator over key-value pairs of a YML_OBJECT.

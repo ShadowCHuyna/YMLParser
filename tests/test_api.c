@@ -95,6 +95,50 @@ int main(void)
 	CHECK(docs[2]->value.integer == 3, "doc[2]=3");
 	YMLDestroyStream(docs);
 
+	/* ── YMLMapGet .splitter ─────────────────────────────────────────── */
+	SECTION("splitter two levels");
+	root = YMLParse("outer:\n  inner: 42\n", .ok = &ok);
+	CHECK(ok == 0 && root, "setup");
+	v = YMLMapGet(root->value.object, "outer.inner", .ok = &ok, .splitter = '.');
+	CHECK(ok == 0 && v && v->value.integer == 42, "found deep value");
+	YMLDestroy(root);
+
+	SECTION("splitter three levels");
+	root = YMLParse("a:\n  b:\n    c: hello\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "a.b.c", .ok = &ok, .splitter = '.');
+	CHECK(ok == 0 && v && v->type == YML_STRING, "three levels");
+	YMLDestroy(root);
+
+	SECTION("splitter missing intermediate key");
+	root = YMLParse("outer:\n  inner: 1\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "missing.inner", .ok = &ok, .splitter = '.');
+	CHECK(ok == 1 && v == NULL, "missing intermediate ok=1");
+	YMLDestroy(root);
+
+	SECTION("splitter missing final key");
+	root = YMLParse("outer:\n  inner: 1\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "outer.nokey", .ok = &ok, .splitter = '.');
+	CHECK(ok == 1 && v == NULL, "missing final ok=1");
+	YMLDestroy(root);
+
+	SECTION("splitter intermediate not object");
+	root = YMLParse("a: 42\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "a.b", .ok = &ok, .splitter = '.');
+	CHECK(ok == 1 && v == NULL, "not an object ok=1");
+	YMLDestroy(root);
+
+	SECTION("splitter type mismatch");
+	root = YMLParse("outer:\n  n: 10\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "outer.n", .ok = &ok, .splitter = '.', .type = YML_STRING);
+	CHECK(ok == 2 && v == NULL, "type mismatch ok=2");
+	YMLDestroy(root);
+
+	SECTION("splitter single segment behaves like normal get");
+	root = YMLParse("key: val\n", .ok = &ok);
+	v = YMLMapGet(root->value.object, "key", .ok = &ok, .splitter = '.');
+	CHECK(ok == 0 && v && v->type == YML_STRING, "single segment ok");
+	YMLDestroy(root);
+
 	TEST_REPORT();
 	return _failed != 0;
 }

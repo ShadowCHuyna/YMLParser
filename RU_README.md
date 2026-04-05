@@ -153,6 +153,7 @@ YMLValue *YMLMapGet(void *object, const char *key, ...options...);
 | `.ok` | `int*` | `NULL` | `0` — найдено, `1` — ключ не найден, `2` — тип не совпадает |
 | `.error` | `char**` | `NULL` | Текст ошибки |
 | `.type` | `YMLValueType` | `YML_ANY` | Ожидаемый тип; при несовпадении — `ok=2`, возврат `NULL` |
+| `.splitter` | `char` | `0` | Если не ноль — разбивает `key` по этому символу и обходит вложенные объекты |
 
 ```c
 // без проверки типа
@@ -161,9 +162,38 @@ YMLValue *v = YMLMapGet(root->value.object, "name");
 // с проверкой типа и кодом ошибки
 YMLValue *n = YMLMapGet(root->value.object, "age", .type=YML_INT, .ok=&ok);
 if (ok != 0) { /* ключ не найден или неверный тип */ }
+
+// обход по пути — эквивалентно двум вложенным вызовам YMLMapGet
+YMLValue *city = YMLMapGet(root->value.object, "address.city", .splitter='.');
 ```
 
 Если `.ok` не передан — ошибка попадает в глобальное состояние, доступное через `YMLErrorPrint()`.
+
+#### Обход по пути через `.splitter`
+
+При установленном `.splitter` ключ разбивается по указанному символу и выполняется автоматический обход вложенных объектов:
+
+```c
+// YAML:
+// server:
+//   host: localhost
+//   port: 8080
+
+YMLValue *host = YMLMapGet(root->value.object, "server.host", .splitter='.');
+YMLValue *port = YMLMapGet(root->value.object, "server.port", .splitter='.', .type=YML_INT);
+```
+
+В качестве разделителя можно использовать любой символ:
+
+```c
+YMLMapGet(root->value.object, "server/host", .splitter='/');
+```
+
+Коды ошибок при использовании `.splitter`:
+- `ok=1` — ключ на каком-либо уровне не найден, или промежуточный узел не является объектом
+- `ok=2` — тип последнего ключа не совпадает с `.type`
+
+> Ключи, буквально содержащие символ-разделитель, не поддерживаются при использовании `.splitter`. Для таких ключей используйте обычный `YMLMapGet`.
 
 ---
 

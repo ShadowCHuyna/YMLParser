@@ -1272,6 +1272,79 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			*optionals.error = g_error;
 		return NULL;
 	}
+
+	if (optionals.splitter != 0)
+	{
+		size_t len = strlen(key);
+		char *buf = malloc(len + 1);
+		if (!buf)
+		{
+			set_error(2, "YMLMapGet: OOM");
+			if (optionals.ok)
+				*optionals.ok = g_ok;
+			if (optionals.error)
+				*optionals.error = g_error;
+			return NULL;
+		}
+		memcpy(buf, key, len + 1);
+
+		void *cur_hm = hm;
+		char *seg = buf;
+		for (;;)
+		{
+			char *sep = seg;
+			while (*sep && *sep != optionals.splitter)
+				sep++;
+			int is_last = (*sep == '\0');
+			*sep = '\0';
+
+			YMLValue *v = hm_get((_hm *)cur_hm, seg);
+			if (!v)
+			{
+				snprintf(g_error, sizeof(g_error), "YMLMapGet: key '%s' not found", seg);
+				g_ok = 1;
+				free(buf);
+				if (optionals.ok)
+					*optionals.ok = g_ok;
+				if (optionals.error)
+					*optionals.error = g_error;
+				return NULL;
+			}
+			if (is_last)
+			{
+				free(buf);
+				if (optionals.type != YML_ANY && v->type != optionals.type)
+				{
+					snprintf(g_error, sizeof(g_error),
+							 "YMLMapGet: key '%s' has type %d, expected %d",
+							 seg, v->type, optionals.type);
+					g_ok = 2;
+					if (optionals.ok)
+						*optionals.ok = g_ok;
+					if (optionals.error)
+						*optionals.error = g_error;
+					return NULL;
+				}
+				if (optionals.ok)
+					*optionals.ok = 0;
+				return v;
+			}
+			if (v->type != YML_OBJECT)
+			{
+				snprintf(g_error, sizeof(g_error),
+						 "YMLMapGet: '%s' is not an object (type %d)", seg, v->type);
+				g_ok = 1;
+				if (optionals.ok)
+					*optionals.ok = g_ok;
+				if (optionals.error)
+					*optionals.error = g_error;
+				return NULL;
+			}
+			cur_hm = v->value.object;
+			seg = sep + 1;
+		}
+	}
+
 	YMLValue *v = hm_get((_hm *)hm, key);
 	if (!v)
 	{

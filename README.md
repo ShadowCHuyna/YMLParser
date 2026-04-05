@@ -155,6 +155,7 @@ Returns a value by string key from a `YML_OBJECT`. `object` is `root->value.obje
 | `.ok` | `int*` | `NULL` | `0` — found, `1` — key not found, `2` — type mismatch |
 | `.error` | `char**` | `NULL` | Error message |
 | `.type` | `YMLValueType` | `YML_ANY` | Expected type; mismatch sets `ok=2` and returns `NULL` |
+| `.splitter` | `char` | `0` | If non-zero, split `key` by this character and traverse nested objects |
 
 ```c
 // without type check
@@ -163,9 +164,38 @@ YMLValue *v = YMLMapGet(root->value.object, "name");
 // with type check and error code
 YMLValue *n = YMLMapGet(root->value.object, "age", .type=YML_INT, .ok=&ok);
 if (ok != 0) { /* key not found or wrong type */ }
+
+// dot-path traversal — equivalent to two nested YMLMapGet calls
+YMLValue *city = YMLMapGet(root->value.object, "address.city", .splitter='.');
 ```
 
 If `.ok` is not passed, errors go to the global state accessible via `YMLErrorPrint()`.
+
+#### Path traversal with `.splitter`
+
+Setting `.splitter` to a non-zero character splits `key` by that character and traverses nested objects automatically:
+
+```c
+// YAML:
+// server:
+//   host: localhost
+//   port: 8080
+
+YMLValue *host = YMLMapGet(root->value.object, "server.host", .splitter='.');
+YMLValue *port = YMLMapGet(root->value.object, "server.port", .splitter='.', .type=YML_INT);
+```
+
+Any character can be used as a separator:
+
+```c
+YMLMapGet(root->value.object, "server/host", .splitter='/');
+```
+
+Error codes with `.splitter`:
+- `ok=1` — a key in the path was not found, or an intermediate node is not an object
+- `ok=2` — type mismatch on the final key
+
+> Keys that literally contain the separator character are not supported when using `.splitter`. Use plain `YMLMapGet` calls for such keys.
 
 ---
 
