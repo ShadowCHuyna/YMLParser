@@ -1,3 +1,9 @@
+/*
+ * example_threads.c — парсинг YAML.
+ *
+ * Сборка:
+ *   make run-example E=example
+ */
 #define YMLPARSER_IMPLEMENTATION
 #include "YMLParser.h"
 #include <stdio.h>

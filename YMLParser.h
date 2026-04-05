@@ -2253,7 +2253,9 @@ static YMLValue *parse_flow_sequence(Parser *p)
 		da_push(v->value.array, *elem);
 		free(elem);
 	}
-	if (cur(p)->type == TK_FLOW_SEQ_END)
+	if (cur(p)->type != TK_FLOW_SEQ_END)
+		parse_error(p, "unclosed '['");
+	else
 		advance(p);
 	return v;
 }
@@ -2312,7 +2314,9 @@ static YMLValue *parse_flow_mapping(Parser *p)
 		free(key);
 		free(val);
 	}
-	if (cur(p)->type == TK_FLOW_MAP_END)
+	if (cur(p)->type != TK_FLOW_MAP_END)
+		parse_error(p, "unclosed '{'");
+	else
 		advance(p);
 	return v;
 }
