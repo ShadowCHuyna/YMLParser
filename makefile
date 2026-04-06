@@ -3,7 +3,7 @@ CFLAGS  = -Wall -Wextra -std=c11
 LDFLAGS = -lm
 
 BUILD   = build
-SRC     = src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c
+SRC     = src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c src/_yml_utils.c src/YMLWriter.c
 OBJ     = $(SRC:src/%.c=$(BUILD)/%.o)
 OBJ_PIC = $(SRC:src/%.c=$(BUILD)/%_pic.o)
 TESTS   = $(patsubst tests/%.c,$(BUILD)/%,$(wildcard tests/test_*.c))

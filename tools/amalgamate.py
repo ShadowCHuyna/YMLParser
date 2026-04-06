@@ -36,7 +36,9 @@ IMPL_FILES = [
 	os.path.join(SRC, "_da.c"),
 	os.path.join(SRC, "_hm.c"),
 	os.path.join(SRC, "_lexer.c"),
+	os.path.join(SRC, "_yml_utils.c"),
 	os.path.join(SRC, "YMLParser.c"),
+	os.path.join(SRC, "YMLWriter.c"),
 ]
 
 # Строки #include, которые нужно выбросить (всё уже инлайнено).

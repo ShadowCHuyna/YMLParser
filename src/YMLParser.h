@@ -177,3 +177,174 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 	for (_YMLMapIter _yml_it_ = _YMLMapIterBegin(object), *_yml_p_ = &_yml_it_; _yml_p_; _yml_p_ = NULL) \
 		for (const char *(key_name) = NULL; _yml_p_; _yml_p_ = NULL)                                     \
 			for (YMLValue * (val_name) = NULL; _YMLMapIterNext(&_yml_it_, (const char **)&(key_name), &(val_name));)
+
+/* ════════════════════════ WRITER API ════════════════════════════════ */
+
+#include <stdio.h>
+
+/*
+ * Options for YMLWrite / YMLWriteBuf.
+ *
+ * .indent  — spaces per nesting level (default 2)
+ * .start   — emit "---" document-start marker (default 0)
+ * .ok      — 0 on success, 1 if buffer too small, 2 on OOM
+ * .error   — pointer to static error message buffer
+ */
+struct _YMLWriteOptions
+{
+	int   *ok;
+	char **error;
+	int    indent;
+	int    start;
+};
+
+/* ── Create ──────────────────────────────────────────────────────── */
+
+/*
+ * Allocate an empty YML_OBJECT node.
+ * Free with YMLDestroy.
+ */
+YMLValue *_YMLCreate(void);
+#define YMLCreate() _YMLCreate()
+
+/*
+ * Allocate an empty YML_ARRAY node.
+ * Free with YMLDestroy.
+ */
+YMLValue *_YMLCreateArr(void);
+#define YMLCreateArr() _YMLCreateArr()
+
+
+/* ── YMLMapAdd ───────────────────────────────────────────────────── */
+
+void _YMLMapAdd_null (YMLValue *obj, const char *key);
+void _YMLMapAdd_bool (YMLValue *obj, const char *key, bool       val);
+void _YMLMapAdd_int  (YMLValue *obj, const char *key, long long  val);
+void _YMLMapAdd_float(YMLValue *obj, const char *key, double     val);
+void _YMLMapAdd_str  (YMLValue *obj, const char *key, const char *val);
+void _YMLMapAdd_node (YMLValue *obj, const char *key, YMLValue   *val);
+
+void _YMLMapAddArr_int  (YMLValue *obj, const char *key, const long long   *arr, size_t len);
+void _YMLMapAddArr_float(YMLValue *obj, const char *key, const double      *arr, size_t len);
+void _YMLMapAddArr_str  (YMLValue *obj, const char *key, const char *const *arr, size_t len);
+
+/* Add a null value: YMLMapAddNull(obj, "key"); */
+#define YMLMapAddNull(obj, key) _YMLMapAdd_null(obj, key)
+
+/*
+ * Add a scalar or nested node. Type is inferred via _Generic.
+ *
+ *   YMLMapAdd(obj, "n", 42);           → YML_INT
+ *   YMLMapAdd(obj, "f", 3.14);         → YML_FLOAT
+ *   YMLMapAdd(obj, "s", "hello");      → YML_STRING (strdup'd)
+ *   YMLMapAdd(obj, "b", (bool)true);   → YML_BOOL
+ *   YMLMapAdd(obj, "sub", node);       → deep-copied YMLValue*
+ *
+ * Duplicate keys are overwritten (old value freed).
+ */
+#define YMLMapAdd(obj, key, val) _Generic((val),        \
+    _Bool:        _YMLMapAdd_bool,                      \
+    int:          _YMLMapAdd_int,                       \
+    long:         _YMLMapAdd_int,                       \
+    long long:    _YMLMapAdd_int,                       \
+    float:        _YMLMapAdd_float,                     \
+    double:       _YMLMapAdd_float,                     \
+    char *:       _YMLMapAdd_str,                       \
+    const char *: _YMLMapAdd_str,                       \
+    YMLValue *:   _YMLMapAdd_node                       \
+)(obj, key, val)
+
+/*
+ * Add a C array as a YML_ARRAY value.
+ *
+ *   long long nums[] = {1, 2, 3};
+ *   YMLMapAddArr(obj, "nums", nums, 3);
+ *
+ *   const char *tags[] = {"a", "b"};
+ *   YMLMapAddArr(obj, "tags", tags, 2);
+ */
+#define YMLMapAddArr(obj, key, arr, len) _Generic((arr),  \
+    long long *:        _YMLMapAddArr_int,                \
+    const long long *:  _YMLMapAddArr_int,                \
+    double *:           _YMLMapAddArr_float,              \
+    const double *:     _YMLMapAddArr_float,              \
+    char **:            _YMLMapAddArr_str,                \
+    const char **:      _YMLMapAddArr_str,                \
+    const char *const*: _YMLMapAddArr_str                 \
+)(obj, key, arr, len)
+
+/* ── YMLArrPush ──────────────────────────────────────────────────── */
+
+void _YMLArrPush_null (YMLValue *arr);
+void _YMLArrPush_bool (YMLValue *arr, bool       val);
+void _YMLArrPush_int  (YMLValue *arr, long long  val);
+void _YMLArrPush_float(YMLValue *arr, double     val);
+void _YMLArrPush_str  (YMLValue *arr, const char *val);
+void _YMLArrPush_node (YMLValue *arr, YMLValue   *val);
+
+void _YMLArrPushArr_int  (YMLValue *arr, const long long   *c_arr, size_t len);
+void _YMLArrPushArr_float(YMLValue *arr, const double      *c_arr, size_t len);
+void _YMLArrPushArr_str  (YMLValue *arr, const char *const *c_arr, size_t len);
+
+/* Push a null element: YMLArrPushNull(arr); */
+#define YMLArrPushNull(arr) _YMLArrPush_null(arr)
+
+/*
+ * Push a scalar or nested node.
+ *
+ *   YMLArrPush(arr, 1);
+ *   YMLArrPush(arr, "two");
+ *   YMLArrPush(arr, (bool)true);
+ *   YMLArrPush(arr, node);
+ */
+#define YMLArrPush(arr, val) _Generic((val),            \
+    _Bool:        _YMLArrPush_bool,                     \
+    int:          _YMLArrPush_int,                      \
+    long:         _YMLArrPush_int,                      \
+    long long:    _YMLArrPush_int,                      \
+    float:        _YMLArrPush_float,                    \
+    double:       _YMLArrPush_float,                    \
+    char *:       _YMLArrPush_str,                      \
+    const char *: _YMLArrPush_str,                      \
+    YMLValue *:   _YMLArrPush_node                      \
+)(arr, val)
+
+/*
+ * Push a C array as a nested YML_ARRAY element.
+ */
+#define YMLArrPushArr(arr, c_arr, len) _Generic((c_arr),  \
+    long long *:        _YMLArrPushArr_int,               \
+    const long long *:  _YMLArrPushArr_int,               \
+    double *:           _YMLArrPushArr_float,             \
+    const double *:     _YMLArrPushArr_float,             \
+    char **:            _YMLArrPushArr_str,               \
+    const char **:      _YMLArrPushArr_str,               \
+    const char *const*: _YMLArrPushArr_str                \
+)(arr, c_arr, len)
+
+/* ── YMLWrite / YMLWriteBuf ──────────────────────────────────────── */
+
+void _YMLWriteStream(YMLValue *obj, FILE *stream, struct _YMLWriteOptions opts);
+int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptions opts);
+
+/*
+ * Serialize obj to a FILE* stream.
+ *
+ *   YMLWrite(obj, stdout);
+ *   YMLWrite(obj, fp, .indent=4, .start=1);
+ */
+#define YMLWriteStream(obj, stream, ...) \
+	_YMLWriteStream(obj, stream, \
+		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
+
+/*
+ * Serialize obj into a char buffer. Returns bytes written (without NUL).
+ * Returns -1 if the buffer is too small (.ok set to 1).
+ *
+ *   char buf[1024];
+ *   int n = YMLWriteBuf(obj, buf, sizeof(buf));
+ *   int n = YMLWriteBuf(obj, buf, sizeof(buf), .start=1, .ok=&ok);
+ */
+#define YMLWriteBuf(obj, buf, cap, ...) \
+	_YMLWriteBuf(obj, buf, cap, \
+		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})

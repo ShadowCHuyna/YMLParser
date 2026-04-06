@@ -27,6 +27,13 @@ static inline char *yml_strdup(const char *s)
 	return copy;
 }
 
+/*
+ * Рекурсивная глубокая копия YMLValue.
+ * Возвращает heap-аллоцированный YMLValue* или NULL при OOM.
+ * Реализация в _yml_utils.c.
+ */
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src);
+
 static inline void yml_value_free_impl(YMLValue *v)
 {
 	if (!v)

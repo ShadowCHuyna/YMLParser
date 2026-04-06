@@ -136,8 +136,6 @@ static YMLValue *parse_flow_sequence(Parser *p);
 static YMLValue *parse_scalar(Parser *p);
 
 /* Глубокая копия YMLValue (для разворачивания алиасов). */
-static YMLValue *yml_deep_copy(const YMLValue *src);
-
 /* ── инференс типа plain-скаляра (YAML Core Schema) ───────────────── */
 
 static bool is_decimal(const char *s, size_t len)
@@ -539,66 +537,6 @@ static YMLValue *anchor_find(Parser *p, const char *name, size_t name_len)
 }
 
 /* ── глубокая копия YMLValue ───────────────────────────────────────── */
-
-static YMLValue *yml_deep_copy(const YMLValue *src)
-{
-	if (!src)
-		return NULL;
-	YMLValue *v = malloc(sizeof(YMLValue));
-	if (!v)
-		return NULL;
-	v->type = src->type;
-	switch (src->type)
-	{
-	case YML_NULL:
-	case YML_BOOL:
-	case YML_INT:
-	case YML_FLOAT:
-		v->value = src->value;
-		break;
-	case YML_STRING:
-		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
-		break;
-	case YML_ARRAY:
-	{
-		size_t n = da_len(src->value.array);
-		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1);
-		for (size_t i = 0; i < n; i++)
-		{
-			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
-			if (cp)
-			{
-				da_push(arr, *cp);
-				free(cp);
-			}
-		}
-		v->value.array = arr;
-		break;
-	}
-	case YML_OBJECT:
-	{
-		_hm *src_hm = (_hm *)src->value.object;
-		_hm *dst_hm = hm_new(src_hm->cap);
-		size_t idx = 0;
-		const char *key;
-		YMLValue *val;
-		while (hm_next(src_hm, &idx, &key, &val))
-		{
-			YMLValue *cp = yml_deep_copy(val);
-			if (cp)
-			{
-				hm_set(dst_hm, key, *cp);
-				free(cp);
-			}
-		}
-		v->value.object = dst_hm;
-		break;
-	}
-	default:
-		break;
-	}
-	return v;
-}
 
 /* ── применить тег к значению ──────────────────────────────────────── */
 

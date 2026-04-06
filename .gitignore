@@ -8,3 +8,5 @@ PLAN_FEATURES.md
 
 test
 test.c
+.test.h
+YMLWriter.md

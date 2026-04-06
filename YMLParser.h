@@ -199,6 +199,177 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value);
 		for (const char *(key_name) = NULL; _yml_p_; _yml_p_ = NULL)                                     \
 			for (YMLValue * (val_name) = NULL; _YMLMapIterNext(&_yml_it_, (const char **)&(key_name), &(val_name));)
 
+/* ════════════════════════ WRITER API ════════════════════════════════ */
+
+#include <stdio.h>
+
+/*
+ * Options for YMLWrite / YMLWriteBuf.
+ *
+ * .indent  — spaces per nesting level (default 2)
+ * .start   — emit "---" document-start marker (default 0)
+ * .ok      — 0 on success, 1 if buffer too small, 2 on OOM
+ * .error   — pointer to static error message buffer
+ */
+struct _YMLWriteOptions
+{
+	int   *ok;
+	char **error;
+	int    indent;
+	int    start;
+};
+
+/* ── Create ──────────────────────────────────────────────────────── */
+
+/*
+ * Allocate an empty YML_OBJECT node.
+ * Free with YMLDestroy.
+ */
+YMLValue *_YMLCreate(void);
+#define YMLCreate() _YMLCreate()
+
+/*
+ * Allocate an empty YML_ARRAY node.
+ * Free with YMLDestroy.
+ */
+YMLValue *_YMLCreateArr(void);
+#define YMLCreateArr() _YMLCreateArr()
+
+
+/* ── YMLMapAdd ───────────────────────────────────────────────────── */
+
+void _YMLMapAdd_null (YMLValue *obj, const char *key);
+void _YMLMapAdd_bool (YMLValue *obj, const char *key, bool       val);
+void _YMLMapAdd_int  (YMLValue *obj, const char *key, long long  val);
+void _YMLMapAdd_float(YMLValue *obj, const char *key, double     val);
+void _YMLMapAdd_str  (YMLValue *obj, const char *key, const char *val);
+void _YMLMapAdd_node (YMLValue *obj, const char *key, YMLValue   *val);
+
+void _YMLMapAddArr_int  (YMLValue *obj, const char *key, const long long   *arr, size_t len);
+void _YMLMapAddArr_float(YMLValue *obj, const char *key, const double      *arr, size_t len);
+void _YMLMapAddArr_str  (YMLValue *obj, const char *key, const char *const *arr, size_t len);
+
+/* Add a null value: YMLMapAddNull(obj, "key"); */
+#define YMLMapAddNull(obj, key) _YMLMapAdd_null(obj, key)
+
+/*
+ * Add a scalar or nested node. Type is inferred via _Generic.
+ *
+ *   YMLMapAdd(obj, "n", 42);           → YML_INT
+ *   YMLMapAdd(obj, "f", 3.14);         → YML_FLOAT
+ *   YMLMapAdd(obj, "s", "hello");      → YML_STRING (strdup'd)
+ *   YMLMapAdd(obj, "b", (bool)true);   → YML_BOOL
+ *   YMLMapAdd(obj, "sub", node);       → deep-copied YMLValue*
+ *
+ * Duplicate keys are overwritten (old value freed).
+ */
+#define YMLMapAdd(obj, key, val) _Generic((val),        \
+    _Bool:        _YMLMapAdd_bool,                      \
+    int:          _YMLMapAdd_int,                       \
+    long:         _YMLMapAdd_int,                       \
+    long long:    _YMLMapAdd_int,                       \
+    float:        _YMLMapAdd_float,                     \
+    double:       _YMLMapAdd_float,                     \
+    char *:       _YMLMapAdd_str,                       \
+    const char *: _YMLMapAdd_str,                       \
+    YMLValue *:   _YMLMapAdd_node                       \
+)(obj, key, val)
+
+/*
+ * Add a C array as a YML_ARRAY value.
+ *
+ *   long long nums[] = {1, 2, 3};
+ *   YMLMapAddArr(obj, "nums", nums, 3);
+ *
+ *   const char *tags[] = {"a", "b"};
+ *   YMLMapAddArr(obj, "tags", tags, 2);
+ */
+#define YMLMapAddArr(obj, key, arr, len) _Generic((arr),  \
+    long long *:        _YMLMapAddArr_int,                \
+    const long long *:  _YMLMapAddArr_int,                \
+    double *:           _YMLMapAddArr_float,              \
+    const double *:     _YMLMapAddArr_float,              \
+    char **:            _YMLMapAddArr_str,                \
+    const char **:      _YMLMapAddArr_str,                \
+    const char *const*: _YMLMapAddArr_str                 \
+)(obj, key, arr, len)
+
+/* ── YMLArrPush ──────────────────────────────────────────────────── */
+
+void _YMLArrPush_null (YMLValue *arr);
+void _YMLArrPush_bool (YMLValue *arr, bool       val);
+void _YMLArrPush_int  (YMLValue *arr, long long  val);
+void _YMLArrPush_float(YMLValue *arr, double     val);
+void _YMLArrPush_str  (YMLValue *arr, const char *val);
+void _YMLArrPush_node (YMLValue *arr, YMLValue   *val);
+
+void _YMLArrPushArr_int  (YMLValue *arr, const long long   *c_arr, size_t len);
+void _YMLArrPushArr_float(YMLValue *arr, const double      *c_arr, size_t len);
+void _YMLArrPushArr_str  (YMLValue *arr, const char *const *c_arr, size_t len);
+
+/* Push a null element: YMLArrPushNull(arr); */
+#define YMLArrPushNull(arr) _YMLArrPush_null(arr)
+
+/*
+ * Push a scalar or nested node.
+ *
+ *   YMLArrPush(arr, 1);
+ *   YMLArrPush(arr, "two");
+ *   YMLArrPush(arr, (bool)true);
+ *   YMLArrPush(arr, node);
+ */
+#define YMLArrPush(arr, val) _Generic((val),            \
+    _Bool:        _YMLArrPush_bool,                     \
+    int:          _YMLArrPush_int,                      \
+    long:         _YMLArrPush_int,                      \
+    long long:    _YMLArrPush_int,                      \
+    float:        _YMLArrPush_float,                    \
+    double:       _YMLArrPush_float,                    \
+    char *:       _YMLArrPush_str,                      \
+    const char *: _YMLArrPush_str,                      \
+    YMLValue *:   _YMLArrPush_node                      \
+)(arr, val)
+
+/*
+ * Push a C array as a nested YML_ARRAY element.
+ */
+#define YMLArrPushArr(arr, c_arr, len) _Generic((c_arr),  \
+    long long *:        _YMLArrPushArr_int,               \
+    const long long *:  _YMLArrPushArr_int,               \
+    double *:           _YMLArrPushArr_float,             \
+    const double *:     _YMLArrPushArr_float,             \
+    char **:            _YMLArrPushArr_str,               \
+    const char **:      _YMLArrPushArr_str,               \
+    const char *const*: _YMLArrPushArr_str                \
+)(arr, c_arr, len)
+
+/* ── YMLWrite / YMLWriteBuf ──────────────────────────────────────── */
+
+void _YMLWriteStream(YMLValue *obj, FILE *stream, struct _YMLWriteOptions opts);
+int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptions opts);
+
+/*
+ * Serialize obj to a FILE* stream.
+ *
+ *   YMLWrite(obj, stdout);
+ *   YMLWrite(obj, fp, .indent=4, .start=1);
+ */
+#define YMLWriteStream(obj, stream, ...) \
+	_YMLWriteStream(obj, stream, \
+		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
+
+/*
+ * Serialize obj into a char buffer. Returns bytes written (without NUL).
+ * Returns -1 if the buffer is too small (.ok set to 1).
+ *
+ *   char buf[1024];
+ *   int n = YMLWriteBuf(obj, buf, sizeof(buf));
+ *   int n = YMLWriteBuf(obj, buf, sizeof(buf), .start=1, .ok=&ok);
+ */
+#define YMLWriteBuf(obj, buf, cap, ...) \
+	_YMLWriteBuf(obj, buf, cap, \
+		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
+
 #ifdef YMLPARSER_IMPLEMENTATION
 /* YML_PRIVATE — скрывает внутренние функции. */
 #define YML_PRIVATE static
@@ -446,6 +617,13 @@ static inline char *yml_strdup(const char *s)
 		memcpy(copy, s, n);
 	return copy;
 }
+
+/*
+ * Рекурсивная глубокая копия YMLValue.
+ * Возвращает heap-аллоцированный YMLValue* или NULL при OOM.
+ * Реализация в _yml_utils.c.
+ */
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src);
 
 static inline void yml_value_free_impl(YMLValue *v)
 {
@@ -1464,6 +1642,67 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 	return tokens;
 }
 
+/* ── src/_yml_utils.c ──────────────────────────────────────────── */
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
+{
+	if (!src)
+		return NULL;
+	YMLValue *v = malloc(sizeof(YMLValue));
+	if (!v)
+		return NULL;
+	v->type = src->type;
+	switch (src->type)
+	{
+	case YML_NULL:
+	case YML_BOOL:
+	case YML_INT:
+	case YML_FLOAT:
+		v->value = src->value;
+		break;
+	case YML_STRING:
+		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
+		break;
+	case YML_ARRAY:
+	{
+		size_t n = da_len(src->value.array);
+		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1);
+		for (size_t i = 0; i < n; i++)
+		{
+			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
+			if (cp)
+			{
+				da_push(arr, *cp);
+				free(cp);
+			}
+		}
+		v->value.array = arr;
+		break;
+	}
+	case YML_OBJECT:
+	{
+		_hm *src_hm = (_hm *)src->value.object;
+		_hm *dst_hm = hm_new(src_hm->cap);
+		size_t idx = 0;
+		const char *key;
+		YMLValue *val;
+		while (hm_next(src_hm, &idx, &key, &val))
+		{
+			YMLValue *cp = yml_deep_copy(val);
+			if (cp)
+			{
+				hm_set(dst_hm, key, *cp);
+				free(cp);
+			}
+		}
+		v->value.object = dst_hm;
+		break;
+	}
+	default:
+		break;
+	}
+	return v;
+}
+
 /* ── src/YMLParser.c ───────────────────────────────────────────── */
 #include <stdio.h>
 #include <string.h>
@@ -1597,8 +1836,6 @@ static YMLValue *parse_flow_sequence(Parser *p);
 static YMLValue *parse_scalar(Parser *p);
 
 /* Глубокая копия YMLValue (для разворачивания алиасов). */
-static YMLValue *yml_deep_copy(const YMLValue *src);
-
 /* ── инференс типа plain-скаляра (YAML Core Schema) ───────────────── */
 
 static bool is_decimal(const char *s, size_t len)
@@ -2000,66 +2237,6 @@ static YMLValue *anchor_find(Parser *p, const char *name, size_t name_len)
 }
 
 /* ── глубокая копия YMLValue ───────────────────────────────────────── */
-
-static YMLValue *yml_deep_copy(const YMLValue *src)
-{
-	if (!src)
-		return NULL;
-	YMLValue *v = malloc(sizeof(YMLValue));
-	if (!v)
-		return NULL;
-	v->type = src->type;
-	switch (src->type)
-	{
-	case YML_NULL:
-	case YML_BOOL:
-	case YML_INT:
-	case YML_FLOAT:
-		v->value = src->value;
-		break;
-	case YML_STRING:
-		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
-		break;
-	case YML_ARRAY:
-	{
-		size_t n = da_len(src->value.array);
-		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1);
-		for (size_t i = 0; i < n; i++)
-		{
-			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
-			if (cp)
-			{
-				da_push(arr, *cp);
-				free(cp);
-			}
-		}
-		v->value.array = arr;
-		break;
-	}
-	case YML_OBJECT:
-	{
-		_hm *src_hm = (_hm *)src->value.object;
-		_hm *dst_hm = hm_new(src_hm->cap);
-		size_t idx = 0;
-		const char *key;
-		YMLValue *val;
-		while (hm_next(src_hm, &idx, &key, &val))
-		{
-			YMLValue *cp = yml_deep_copy(val);
-			if (cp)
-			{
-				hm_set(dst_hm, key, *cp);
-				free(cp);
-			}
-		}
-		v->value.object = dst_hm;
-		break;
-	}
-	default:
-		break;
-	}
-	return v;
-}
 
 /* ── применить тег к значению ──────────────────────────────────────── */
 
@@ -2773,20 +2950,19 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			}
 			if (is_last)
 			{
+				free(buf);
 				if (optionals.type != YML_ANY && v->type != optionals.type)
 				{
 					snprintf(g_error, sizeof(g_error),
 							 "YMLMapGet: key '%s' has type %d, expected %d",
 							 seg, v->type, optionals.type);
 					g_ok = 2;
-					free(buf);
 					if (optionals.ok)
 						*optionals.ok = g_ok;
 					if (optionals.error)
 						*optionals.error = g_error;
 					return NULL;
 				}
-				free(buf);
 				if (optionals.ok)
 					*optionals.ok = 0;
 				return v;
@@ -2796,7 +2972,6 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 				snprintf(g_error, sizeof(g_error),
 						 "YMLMapGet: '%s' is not an object (type %d)", seg, v->type);
 				g_ok = 1;
-				free(buf);
 				if (optionals.ok)
 					*optionals.ok = g_ok;
 				if (optionals.error)
@@ -2846,6 +3021,553 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value)
 	if (!iter || !iter->_hm)
 		return false;
 	return hm_next((_hm *)iter->_hm, &iter->_i, key, value);
+}
+
+/* ── src/YMLWriter.c ───────────────────────────────────────────── */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+
+/* ── internal value constructors ───────────────────────────────────── */
+
+static YMLValue _yml_mk_str(const char *v)
+{
+	YMLValue r = {.type = YML_STRING};
+	r.value.string = v ? yml_strdup(v) : NULL;
+	return r;
+}
+
+static YMLValue _yml_mk_node(YMLValue *v)
+{
+	if (!v)
+		return (YMLValue){.type = YML_NULL};
+	YMLValue *cp = yml_deep_copy(v);
+	if (!cp)
+		return (YMLValue){.type = YML_NULL};
+	YMLValue r = *cp;
+	free(cp);
+	return r;
+}
+
+/* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
+
+YMLValue *_YMLCreate(void)
+{
+	YMLValue *v = malloc(sizeof(YMLValue));
+	if (!v)
+		return NULL;
+	_hm *hm = hm_new(8);
+	if (!hm)
+	{
+		free(v);
+		return NULL;
+	}
+	v->type = YML_OBJECT;
+	v->value.object = hm;
+	return v;
+}
+
+YMLValue *_YMLCreateArr(void)
+{
+	YMLValue *v = malloc(sizeof(YMLValue));
+	if (!v)
+		return NULL;
+	YMLValue *arr = da_new(YMLValue, 4);
+	if (!arr)
+	{
+		free(v);
+		return NULL;
+	}
+	v->type = YML_ARRAY;
+	v->value.array = arr;
+	return v;
+}
+
+/* ── helpers: вставка с cleanup дубликата ───────────────────────────── */
+
+static void map_insert(YMLValue *obj, const char *key, YMLValue val)
+{
+	_hm *hm = (_hm *)obj->value.object;
+	YMLValue *existing = hm_get(hm, key);
+	if (existing)
+		yml_value_free_impl(existing); /* чистим содержимое старого значения */
+	hm_set(hm, key, val);
+}
+
+/* ── YMLMapAdd ──────────────────────────────────────────────────────── */
+
+void _YMLMapAdd_null(YMLValue *obj, const char *key)
+{
+	map_insert(obj, key, (YMLValue){.type = YML_NULL});
+}
+
+void _YMLMapAdd_bool(YMLValue *obj, const char *key, bool val)
+{
+	map_insert(obj, key, (YMLValue){.type = YML_BOOL, .value.boolean = val});
+}
+
+void _YMLMapAdd_int(YMLValue *obj, const char *key, long long val)
+{
+	map_insert(obj, key, (YMLValue){.type = YML_INT, .value.integer = val});
+}
+
+void _YMLMapAdd_float(YMLValue *obj, const char *key, double val)
+{
+	map_insert(obj, key, (YMLValue){.type = YML_FLOAT, .value.number = val});
+}
+
+void _YMLMapAdd_str(YMLValue *obj, const char *key, const char *val)
+{
+	map_insert(obj, key, _yml_mk_str(val));
+}
+
+void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
+{
+	map_insert(obj, key, _yml_mk_node(val));
+}
+
+static YMLValue *_yml_build_int_arr(const long long *arr, size_t len)
+{
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	for (size_t i = 0; i < len; i++)
+	{
+		YMLValue e = {.type = YML_INT, .value.integer = arr[i]};
+		da_push(da, e);
+	}
+	return da;
+}
+
+static YMLValue *_yml_build_float_arr(const double *arr, size_t len)
+{
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	for (size_t i = 0; i < len; i++)
+	{
+		YMLValue e = {.type = YML_FLOAT, .value.number = arr[i]};
+		da_push(da, e);
+	}
+	return da;
+}
+
+static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len)
+{
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	for (size_t i = 0; i < len; i++)
+	{
+		YMLValue e = {.type = YML_STRING,
+		              .value.string = arr[i] ? yml_strdup(arr[i]) : NULL};
+		da_push(da, e);
+	}
+	return da;
+}
+
+void _YMLMapAddArr_int(YMLValue *obj, const char *key,
+                       const long long *arr, size_t len)
+{
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_int_arr(arr, len)};
+	map_insert(obj, key, v);
+}
+
+void _YMLMapAddArr_float(YMLValue *obj, const char *key,
+                         const double *arr, size_t len)
+{
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_float_arr(arr, len)};
+	map_insert(obj, key, v);
+}
+
+void _YMLMapAddArr_str(YMLValue *obj, const char *key,
+                       const char *const *arr, size_t len)
+{
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_str_arr(arr, len)};
+	map_insert(obj, key, v);
+}
+
+/* ── YMLArrPush ─────────────────────────────────────────────────────── */
+
+void _YMLArrPush_null(YMLValue *arr)
+{
+	YMLValue e = {.type = YML_NULL};
+	da_push(arr->value.array, e);
+}
+
+void _YMLArrPush_bool(YMLValue *arr, bool val)
+{
+	YMLValue e = {.type = YML_BOOL, .value.boolean = val};
+	da_push(arr->value.array, e);
+}
+
+void _YMLArrPush_int(YMLValue *arr, long long val)
+{
+	YMLValue e = {.type = YML_INT, .value.integer = val};
+	da_push(arr->value.array, e);
+}
+
+void _YMLArrPush_float(YMLValue *arr, double val)
+{
+	YMLValue e = {.type = YML_FLOAT, .value.number = val};
+	da_push(arr->value.array, e);
+}
+
+void _YMLArrPush_str(YMLValue *arr, const char *val)
+{
+	da_push(arr->value.array, _yml_mk_str(val));
+}
+
+void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
+{
+	da_push(arr->value.array, _yml_mk_node(val));
+}
+
+void _YMLArrPushArr_int(YMLValue *arr, const long long *c_arr, size_t len)
+{
+	YMLValue nested = {.type = YML_ARRAY,
+	                   .value.array = _yml_build_int_arr(c_arr, len)};
+	da_push(arr->value.array, nested);
+}
+
+void _YMLArrPushArr_float(YMLValue *arr, const double *c_arr, size_t len)
+{
+	YMLValue nested = {.type = YML_ARRAY,
+	                   .value.array = _yml_build_float_arr(c_arr, len)};
+	da_push(arr->value.array, nested);
+}
+
+void _YMLArrPushArr_str(YMLValue *arr, const char *const *c_arr, size_t len)
+{
+	YMLValue nested = {.type = YML_ARRAY,
+	                   .value.array = _yml_build_str_arr(c_arr, len)};
+	da_push(arr->value.array, nested);
+}
+
+/* ══════════════════════════ SERIALIZER ══════════════════════════════ */
+
+typedef struct
+{
+	FILE   *stream; /* != NULL → поток */
+	char   *buf;    /* != NULL → буфер */
+	size_t  cap;    /* ёмкость буфера */
+	size_t  pos;    /* байт записано */
+	int     indent; /* пробелов на уровень */
+	int     emit_start; /* 1 → emit "---" */
+	int     ok;
+	char    error[256];
+} _YMLWriteCtx;
+
+/* Записать len байт; при переполнении выставить ok=1 */
+static void _yml_emit(_YMLWriteCtx *ctx, const char *s, size_t len)
+{
+	if (ctx->ok)
+		return;
+	if (ctx->stream)
+	{
+		fwrite(s, 1, len, ctx->stream);
+	}
+	else
+	{
+		if (ctx->pos + len + 1 > ctx->cap)
+		{
+			ctx->ok = 1;
+			snprintf(ctx->error, sizeof(ctx->error), "YMLWrite: buffer too small");
+			return;
+		}
+		memcpy(ctx->buf + ctx->pos, s, len);
+		ctx->pos += len;
+	}
+}
+
+static void _yml_emit_c(_YMLWriteCtx *ctx, char c)
+{
+	_yml_emit(ctx, &c, 1);
+}
+
+static void _yml_emit_str(_YMLWriteCtx *ctx, const char *s)
+{
+	if (s)
+		_yml_emit(ctx, s, strlen(s));
+}
+
+static void _yml_emit_indent(_YMLWriteCtx *ctx, int depth)
+{
+	for (int i = 0; i < depth * ctx->indent; i++)
+		_yml_emit_c(ctx, ' ');
+}
+
+/* Нужны ли кавычки для plain-скаляра? */
+static int _yml_needs_quotes(const char *s)
+{
+	if (!s || *s == '\0')
+		return 1;
+	/* ведущий пробел */
+	if (*s == ' ' || *s == '\t')
+		return 1;
+	/* спецсимволы в начале */
+	switch (*s)
+	{
+	case '-': case ':': case '?': case '#': case '&': case '*':
+	case '!': case '|': case '>': case '\'': case '"': case '%':
+	case '@': case '`': case '[': case '{': case ',':
+		return 1;
+	default:
+		break;
+	}
+	/* управляющие символы или спецпоследовательности внутри */
+	for (const char *p = s; *p; p++)
+	{
+		if ((unsigned char)*p < 0x20)
+			return 1; /* \n, \r, \t и т.д. */
+		if (*p == ':' && (*(p + 1) == ' ' || *(p + 1) == '\0'))
+			return 1;
+		if (*p == ' ' && *(p + 1) == '#')
+			return 1;
+	}
+	/* строки совпадающие с YAML-скалярами */
+	if (strcmp(s, "null") == 0 || strcmp(s, "~") == 0 ||
+	    strcmp(s, "true") == 0 || strcmp(s, "false") == 0 ||
+	    strcmp(s, ".inf") == 0 || strcmp(s, "-.inf") == 0 ||
+	    strcmp(s, ".nan") == 0 || strcmp(s, ".Inf") == 0 ||
+	    strcmp(s, ".NaN") == 0 || strcmp(s, ".INF") == 0)
+		return 1;
+	return 0;
+}
+
+/* Записать строку с кавычками + escape если нужно, иначе plain */
+static void _yml_write_string(_YMLWriteCtx *ctx, const char *s)
+{
+	if (!s)
+	{
+		_yml_emit_str(ctx, "null");
+		return;
+	}
+	if (!_yml_needs_quotes(s))
+	{
+		_yml_emit_str(ctx, s);
+		return;
+	}
+	_yml_emit_c(ctx, '"');
+	for (const char *p = s; *p; p++)
+	{
+		switch (*p)
+		{
+		case '"':  _yml_emit(ctx, "\\\"", 2); break;
+		case '\\': _yml_emit(ctx, "\\\\", 2); break;
+		case '\n': _yml_emit(ctx, "\\n",  2); break;
+		case '\r': _yml_emit(ctx, "\\r",  2); break;
+		case '\t': _yml_emit(ctx, "\\t",  2); break;
+		default:   _yml_emit_c(ctx, *p);      break;
+		}
+	}
+	_yml_emit_c(ctx, '"');
+}
+
+static void _yml_write_node(_YMLWriteCtx *ctx, const YMLValue *node, int depth);
+
+static void _yml_write_node(_YMLWriteCtx *ctx, const YMLValue *node, int depth)
+{
+	if (ctx->ok)
+		return;
+	if (!node)
+	{
+		_yml_emit_str(ctx, "null");
+		return;
+	}
+	switch (node->type)
+	{
+	case YML_NULL:
+		_yml_emit_str(ctx, "null");
+		break;
+	case YML_BOOL:
+		_yml_emit_str(ctx, node->value.boolean ? "true" : "false");
+		break;
+	case YML_INT:
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%lld", (long long)node->value.integer);
+		_yml_emit_str(ctx, buf);
+		break;
+	}
+	case YML_FLOAT:
+	{
+		double d = node->value.number;
+		char buf[32];
+		if (isinf(d))
+			snprintf(buf, sizeof(buf), "%s", d > 0 ? ".inf" : "-.inf");
+		else if (isnan(d))
+			snprintf(buf, sizeof(buf), ".nan");
+		else
+			snprintf(buf, sizeof(buf), "%.17g", d);
+		_yml_emit_str(ctx, buf);
+		break;
+	}
+	case YML_STRING:
+		_yml_write_string(ctx, node->value.string);
+		break;
+	case YML_ARRAY:
+	{
+		size_t n = da_len(node->value.array);
+		if (n == 0)
+		{
+			_yml_emit_str(ctx, "[]");
+			break;
+		}
+		for (size_t i = 0; i < n; i++)
+		{
+			const YMLValue *elem = &node->value.array[i];
+			_yml_emit_c(ctx, '\n');
+			_yml_emit_indent(ctx, depth);
+			_yml_emit_str(ctx, "- ");
+			int is_collection = (elem->type == YML_ARRAY || elem->type == YML_OBJECT);
+			if (is_collection)
+				_yml_write_node(ctx, elem, depth + 1);
+			else
+				_yml_write_node(ctx, elem, depth);
+		}
+		break;
+	}
+	case YML_OBJECT:
+	{
+		_hm *hm = (_hm *)node->value.object;
+		if (hm->len == 0)
+		{
+			_yml_emit_str(ctx, "{}");
+			break;
+		}
+		size_t idx = 0;
+		const char *key;
+		YMLValue *val;
+		while (hm_next(hm, &idx, &key, &val))
+		{
+			_yml_emit_c(ctx, '\n');
+			_yml_emit_indent(ctx, depth);
+			_yml_write_string(ctx, key);
+			_yml_emit_c(ctx, ':');
+			int is_collection = (val->type == YML_ARRAY || val->type == YML_OBJECT);
+			if (is_collection)
+				_yml_write_node(ctx, val, depth + 1);
+			else
+			{
+				_yml_emit_c(ctx, ' ');
+				_yml_write_node(ctx, val, depth);
+			}
+		}
+		break;
+	}
+	default:
+		_yml_emit_str(ctx, "null");
+		break;
+	}
+}
+
+static void _yml_write(YMLValue *obj, _YMLWriteCtx *ctx)
+{
+	if (ctx->emit_start)
+		_yml_emit_str(ctx, "---");
+
+	/* корневой объект/массив начинается без ведущего \n */
+	if (obj && (obj->type == YML_OBJECT || obj->type == YML_ARRAY))
+	{
+		_hm *hm = NULL;
+		size_t n = 0;
+		if (obj->type == YML_OBJECT)
+		{
+			hm = (_hm *)obj->value.object;
+			n = hm->len;
+		}
+		else
+			n = da_len(obj->value.array);
+
+		if (n == 0)
+		{
+			if (ctx->emit_start)
+				_yml_emit_c(ctx, '\n');
+			_yml_emit_str(ctx, obj->type == YML_OBJECT ? "{}\n" : "[]\n");
+			return;
+		}
+
+		/* записываем дочерние элементы: каждый начинается с \n+indent */
+		if (obj->type == YML_OBJECT)
+		{
+			size_t idx = 0;
+			const char *key;
+			YMLValue *val;
+			while (hm_next(hm, &idx, &key, &val))
+			{
+				_yml_emit_c(ctx, '\n');
+				_yml_write_string(ctx, key);
+				_yml_emit_c(ctx, ':');
+				int is_col = (val->type == YML_ARRAY || val->type == YML_OBJECT);
+				if (is_col)
+					_yml_write_node(ctx, val, 1);
+				else
+				{
+					_yml_emit_c(ctx, ' ');
+					_yml_write_node(ctx, val, 0);
+				}
+			}
+		}
+		else
+		{
+			for (size_t i = 0; i < n; i++)
+			{
+				const YMLValue *elem = &obj->value.array[i];
+				_yml_emit_c(ctx, '\n');
+				_yml_emit_str(ctx, "- ");
+				int is_col = (elem->type == YML_ARRAY || elem->type == YML_OBJECT);
+				if (is_col)
+					_yml_write_node(ctx, elem, 1);
+				else
+					_yml_write_node(ctx, elem, 0);
+			}
+		}
+		_yml_emit_c(ctx, '\n');
+	}
+	else
+	{
+		if (ctx->emit_start)
+			_yml_emit_c(ctx, '\n');
+		_yml_write_node(ctx, obj, 0);
+		_yml_emit_c(ctx, '\n');
+	}
+}
+
+/* ── public ─────────────────────────────────────────────────────────── */
+
+void _YMLWriteStream(YMLValue *obj, FILE *stream, struct _YMLWriteOptions opts)
+{
+	_YMLWriteCtx ctx = {
+		.stream = stream,
+		.buf    = NULL,
+		.cap    = 0,
+		.pos    = 0,
+		.indent = opts.indent > 0 ? opts.indent : 2,
+		.emit_start = opts.start,
+		.ok     = 0,
+	};
+	_yml_write(obj, &ctx);
+	if (opts.ok)
+		*opts.ok = ctx.ok;
+	if (opts.error && ctx.ok)
+		*opts.error = ctx.error;
+}
+
+int _YMLWriteBuf(YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptions opts)
+{
+	_YMLWriteCtx ctx = {
+		.stream = NULL,
+		.buf    = buf,
+		.cap    = cap,
+		.pos    = 0,
+		.indent = opts.indent > 0 ? opts.indent : 2,
+		.emit_start = opts.start,
+		.ok     = 0,
+	};
+	_yml_write(obj, &ctx);
+	if (ctx.ok == 0 && cap > 0)
+		buf[ctx.pos] = '\0';
+	if (opts.ok)
+		*opts.ok = ctx.ok;
+	if (opts.error && ctx.ok)
+		*opts.error = ctx.error;
+	return ctx.ok ? -1 : (int)ctx.pos;
 }
 
 #endif /* YMLPARSER_IMPLEMENTATION */
