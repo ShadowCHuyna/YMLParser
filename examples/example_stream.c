@@ -68,7 +68,7 @@ int main(void)
 	YMLValue **docs = YMLParseStream(stream, .ok = &ok);
 	if (ok != 0)
 	{
-		YMLErrorPrint();
+		YMLPrintError();
 		return 1;
 	}
 
@@ -99,7 +99,7 @@ int main(void)
 		/* Ожидаем ошибку "unknown alias" — это правильное поведение. */
 		fflush(stdout);
 		fprintf(stderr, "Ожидаемая ошибка: ");
-		YMLErrorPrint();
+		YMLPrintError();
 	}
 	else
 	{
@@ -122,7 +122,7 @@ int main(void)
 	docs = YMLParseStream(implicit, .ok = &ok);
 	if (ok != 0)
 	{
-		YMLErrorPrint();
+		YMLPrintError();
 		return 1;
 	}
 	printf("Получено документов: %zu\n", YMLArrayLen(docs));

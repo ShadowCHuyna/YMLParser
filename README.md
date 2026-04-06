@@ -17,7 +17,11 @@ A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define 
    - [YMLMapGet](#ymlmapget)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
-   - [YMLErrorPrint](#ymlerrorprint)
+   - [YMLPrintError](#ymlerrorprint)
+   - [YMLCreate / YMLCreateArr](#ymlcreate--ymlcreatearr)
+   - [YMLMapAdd / YMLMapAddNull / YMLMapAddArr](#ymlmapadd--ymlmapaddnull--ymlmapaddr)
+   - [YMLArrPush / YMLArrPushNull / YMLArrPushArr](#ymlarrpush--ymlarrpushnull--ymlarrpusharr)
+   - [YMLWriteStream / YMLWriteBuf](#ymlwritestream--ymlwritebuf)
 3. [Error handling](#error-handling)
 4. [Build](#build)
 5. [What is not supported](#what-is-not-supported)
@@ -233,17 +237,141 @@ for (size_t i = 0; i < YMLArrayLen(arr->value.array); i++)
 
 ---
 
-### YMLErrorPrint
+### YMLPrintError
 
 ```c
-int YMLErrorPrint(void);
+int YMLPrintError(void);
 ```
 
 If the last operation produced an error (and `.ok` was not passed), prints the message to `stderr` and returns the error code. Otherwise returns `0`. Each call resets the global error state.
 
 ```c
 YMLMapGet(root->value.object, "missing_key");
-if (YMLErrorPrint() != 0) { /* ... */ }
+if (YMLPrintError() != 0) { /* ... */ }
+```
+
+---
+
+### YMLCreate / YMLCreateArr
+
+```c
+YMLValue *YMLCreate(void);
+YMLValue *YMLCreateArr(void);
+```
+
+Create an empty `YML_OBJECT` or `YML_ARRAY` node. Free with `YMLDestroy`.
+
+```c
+YMLValue *obj = YMLCreate();     // empty mapping
+YMLValue *arr = YMLCreateArr();  // empty sequence
+```
+
+---
+
+### YMLMapAdd / YMLMapAddNull / YMLMapAddArr
+
+```c
+YMLMapAdd(obj, key, val);
+YMLMapAddNull(obj, key);
+YMLMapAddArr(obj, key, c_array, len);
+```
+
+Add a key–value pair to a `YML_OBJECT`. The type of `val` is inferred via `_Generic`.
+
+| Call | Inferred type |
+|------|--------------|
+| `YMLMapAdd(obj, "n", (long long)42)` | `YML_INT` |
+| `YMLMapAdd(obj, "f", 3.14)` | `YML_FLOAT` |
+| `YMLMapAdd(obj, "s", "hello")` | `YML_STRING` (strdup'd) |
+| `YMLMapAdd(obj, "b", (bool)true)` | `YML_BOOL` |
+| `YMLMapAdd(obj, "sub", node)` | deep-copied `YMLValue*` |
+| `YMLMapAddNull(obj, "k")` | `YML_NULL` |
+
+Duplicate keys are overwritten (old value freed). When adding a nested `YMLValue*` the node is deep-copied, so the original can be destroyed immediately after.
+
+`YMLMapAddArr` converts a plain C array into a `YML_ARRAY` child and supports `long long[]`, `double[]`, and `const char*[]`.
+
+```c
+YMLValue *obj = YMLCreate();
+YMLMapAdd(obj, "name",   "Alice");
+YMLMapAdd(obj, "age",    (long long)30);
+YMLMapAdd(obj, "score",  98.6);
+YMLMapAdd(obj, "active", (bool)true);
+YMLMapAddNull(obj, "token");
+
+long long scores[] = {95, 87, 100};
+YMLMapAddArr(obj, "scores", scores, 3);
+
+const char *tags[] = {"yaml", "c11"};
+YMLMapAddArr(obj, "tags", tags, 2);
+```
+
+---
+
+### YMLArrPush / YMLArrPushNull / YMLArrPushArr
+
+```c
+YMLArrPush(arr, val);
+YMLArrPushNull(arr);
+YMLArrPushArr(arr, c_array, len);
+```
+
+Append an element to a `YML_ARRAY`. Same type inference rules as `YMLMapAdd`. Nested `YMLValue*` is deep-copied.
+
+```c
+YMLValue *arr = YMLCreateArr();
+YMLArrPush(arr, (long long)1);
+YMLArrPush(arr, 2.5);
+YMLArrPush(arr, "three");
+YMLArrPush(arr, (bool)false);
+YMLArrPushNull(arr);
+```
+
+`YMLArrPushArr` appends a C array as a nested `YML_ARRAY` element.
+
+---
+
+### YMLWriteStream / YMLWriteBuf
+
+```c
+void YMLWriteStream(YMLValue *obj, FILE *stream, ...options...);
+int  YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, ...options...);
+```
+
+Serialize a `YMLValue` tree to YAML text.
+
+`YMLWriteStream` writes to any `FILE*`. `YMLWriteBuf` writes into a caller-supplied buffer and returns the number of bytes written (excluding the NUL terminator), or `-1` on error.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `.indent` | `int` | `2` | Spaces per nesting level |
+| `.start` | `int` | `0` | Emit `---` document-start marker |
+| `.ok` | `int*` | `NULL` | `0` — success, `1` — buffer too small, `2` — OOM |
+| `.error` | `char**` | `NULL` | Error message |
+
+```c
+// to stdout
+YMLWriteStream(obj, stdout);
+YMLWriteStream(obj, stdout, .indent=4, .start=1);
+
+// to buffer
+char buf[1024];
+int ok = 0;
+int n = YMLWriteBuf(obj, buf, sizeof(buf), .ok=&ok);
+if (ok != 0) fprintf(stderr, "write error\n");
+```
+
+Round-trip example:
+
+```c
+YMLValue *obj = YMLCreate();
+YMLMapAdd(obj, "x", (long long)1);
+
+char buf[256];
+YMLWriteBuf(obj, buf, sizeof(buf));
+YMLDestroy(obj);
+
+YMLValue *root = YMLParse(buf);
 ```
 
 ---

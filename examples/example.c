@@ -14,7 +14,7 @@ int main(void) {
 		"age: 30\n"
 		"tags: [dev, yaml]\n"
 	);
-	if (YMLErrorPrint() != 0) return 1;
+	if (YMLPrintError() != 0) return 1;
 
 	YMLValue *name = YMLMapGet(root->value.object, "name");
 	YMLValue *age  = YMLMapGet(root->value.object, "age");

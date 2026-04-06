@@ -133,7 +133,7 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals);
  * If the last operation produced an error, prints it to stderr
  * and returns the error code. Otherwise returns 0.
  */
-int YMLErrorPrint(void);
+int YMLPrintError(void);
 
 /*
  * Returns a YMLValue* by string key from a YML_OBJECT.

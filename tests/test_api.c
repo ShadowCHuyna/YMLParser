@@ -35,16 +35,16 @@ int main(void)
 	v = YMLMapGet(root->value.object, "n");
 	CHECK(v && v->value.integer == 42, "no type check by default");
 
-	/* ── YMLErrorPrint ────────────────────────────────────────────── */
-	SECTION("YMLErrorPrint no error → 0");
+	/* ── YMLPrintError ────────────────────────────────────────────── */
+	SECTION("YMLPrintError no error → 0");
 	/* успешный вызов сбрасывает g_ok в 0 */
 	v = YMLMapGet(root->value.object, "n");
 	(void)v;
-	CHECK(YMLErrorPrint() == 0, "no error after successful call");
+	CHECK(YMLPrintError() == 0, "no error after successful call");
 
-	SECTION("YMLErrorPrint after missing key → 1");
+	SECTION("YMLPrintError after missing key → 1");
 	YMLMapGet(root->value.object, "nonexistent"); /* без .ok — ставит глобальную ошибку */
-	CHECK(YMLErrorPrint() == 1, "global error code 1");
+	CHECK(YMLPrintError() == 1, "global error code 1");
 
 	/* ── YMLMapForech ─────────────────────────────────────────────── */
 	SECTION("YMLMapForech iterates all keys");

@@ -15,7 +15,11 @@
    - [YMLMapGet](#ymlmapget)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
-   - [YMLErrorPrint](#ymlerrorprint)
+   - [YMLPrintError](#ymlerrorprint)
+   - [YMLCreate / YMLCreateArr](#ymlcreate--ymlcreatearr)
+   - [YMLMapAdd / YMLMapAddNull / YMLMapAddArr](#ymlmapadd--ymlmapaddnull--ymlmapaddr)
+   - [YMLArrPush / YMLArrPushNull / YMLArrPushArr](#ymlarrpush--ymlarrpushnull--ymlarrpusharr)
+   - [YMLWriteStream / YMLWriteBuf](#ymlwritestream--ymlwritebuf)
 3. [Обработка ошибок](#обработка-ошибок)
 4. [Сборка](#сборка)
 5. [Что не поддерживается](#что-не-поддерживается)
@@ -231,17 +235,141 @@ for (size_t i = 0; i < YMLArrayLen(arr->value.array); i++)
 
 ---
 
-### YMLErrorPrint
+### YMLPrintError
 
 ```c
-int YMLErrorPrint(void);
+int YMLPrintError(void);
 ```
 
 Если последняя операция завершилась ошибкой (и `.ok` не был передан) — печатает сообщение в `stderr` и возвращает код ошибки. Иначе возвращает `0`. Каждый вызов сбрасывает глобальное состояние ошибки.
 
 ```c
 YMLMapGet(root->value.object, "missing_key");
-if (YMLErrorPrint() != 0) { /* ... */ }
+if (YMLPrintError() != 0) { /* ... */ }
+```
+
+---
+
+### YMLCreate / YMLCreateArr
+
+```c
+YMLValue *YMLCreate(void);
+YMLValue *YMLCreateArr(void);
+```
+
+Создают пустой `YML_OBJECT` или `YML_ARRAY`. Освобождать через `YMLDestroy`.
+
+```c
+YMLValue *obj = YMLCreate();     // пустое отображение
+YMLValue *arr = YMLCreateArr();  // пустая последовательность
+```
+
+---
+
+### YMLMapAdd / YMLMapAddNull / YMLMapAddArr
+
+```c
+YMLMapAdd(obj, key, val);
+YMLMapAddNull(obj, key);
+YMLMapAddArr(obj, key, c_array, len);
+```
+
+Добавляют пару ключ–значение в `YML_OBJECT`. Тип `val` выводится через `_Generic`.
+
+| Вызов | Тип |
+|-------|-----|
+| `YMLMapAdd(obj, "n", (long long)42)` | `YML_INT` |
+| `YMLMapAdd(obj, "f", 3.14)` | `YML_FLOAT` |
+| `YMLMapAdd(obj, "s", "hello")` | `YML_STRING` (strdup'd) |
+| `YMLMapAdd(obj, "b", (bool)true)` | `YML_BOOL` |
+| `YMLMapAdd(obj, "sub", node)` | deep-копия `YMLValue*` |
+| `YMLMapAddNull(obj, "k")` | `YML_NULL` |
+
+При дублировании ключа старое значение освобождается. Вложенный `YMLValue*` глубоко копируется, поэтому оригинал можно уничтожить сразу после добавления.
+
+`YMLMapAddArr` конвертирует C-массив в дочерний `YML_ARRAY`. Поддерживаются `long long[]`, `double[]`, `const char*[]`.
+
+```c
+YMLValue *obj = YMLCreate();
+YMLMapAdd(obj, "name",   "Alice");
+YMLMapAdd(obj, "age",    (long long)30);
+YMLMapAdd(obj, "score",  98.6);
+YMLMapAdd(obj, "active", (bool)true);
+YMLMapAddNull(obj, "token");
+
+long long scores[] = {95, 87, 100};
+YMLMapAddArr(obj, "scores", scores, 3);
+
+const char *tags[] = {"yaml", "c11"};
+YMLMapAddArr(obj, "tags", tags, 2);
+```
+
+---
+
+### YMLArrPush / YMLArrPushNull / YMLArrPushArr
+
+```c
+YMLArrPush(arr, val);
+YMLArrPushNull(arr);
+YMLArrPushArr(arr, c_array, len);
+```
+
+Добавляют элемент в `YML_ARRAY`. Те же правила вывода типа, что у `YMLMapAdd`. Вложенный `YMLValue*` глубоко копируется.
+
+```c
+YMLValue *arr = YMLCreateArr();
+YMLArrPush(arr, (long long)1);
+YMLArrPush(arr, 2.5);
+YMLArrPush(arr, "three");
+YMLArrPush(arr, (bool)false);
+YMLArrPushNull(arr);
+```
+
+`YMLArrPushArr` добавляет C-массив как вложенный `YML_ARRAY`-элемент.
+
+---
+
+### YMLWriteStream / YMLWriteBuf
+
+```c
+void YMLWriteStream(YMLValue *obj, FILE *stream, ...options...);
+int  YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, ...options...);
+```
+
+Сериализуют дерево `YMLValue` в YAML-текст.
+
+`YMLWriteStream` пишет в любой `FILE*`. `YMLWriteBuf` пишет в буфер, переданный вызывающим, и возвращает количество записанных байт (без NUL-терминатора) или `-1` при ошибке.
+
+| Опция | Тип | По умолчанию | Описание |
+|-------|-----|--------------|----------|
+| `.indent` | `int` | `2` | Пробелов на уровень вложенности |
+| `.start` | `int` | `0` | Добавить маркер `---` в начало |
+| `.ok` | `int*` | `NULL` | `0` — успех, `1` — буфер мал, `2` — OOM |
+| `.error` | `char**` | `NULL` | Текст ошибки |
+
+```c
+// в stdout
+YMLWriteStream(obj, stdout);
+YMLWriteStream(obj, stdout, .indent=4, .start=1);
+
+// в буфер
+char buf[1024];
+int ok = 0;
+int n = YMLWriteBuf(obj, buf, sizeof(buf), .ok=&ok);
+if (ok != 0) fprintf(stderr, "write error\n");
+```
+
+Пример round-trip:
+
+```c
+YMLValue *obj = YMLCreate();
+YMLMapAdd(obj, "x", (long long)1);
+
+char buf[256];
+YMLWriteBuf(obj, buf, sizeof(buf));
+YMLDestroy(obj);
+
+YMLValue *root = YMLParse(buf);
 ```
 
 ---

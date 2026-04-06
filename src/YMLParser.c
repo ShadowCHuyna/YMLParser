@@ -23,7 +23,7 @@ static void set_error(int code, const char *msg)
 	snprintf(g_error, sizeof(g_error), "%s", msg);
 }
 
-int YMLErrorPrint(void)
+int YMLPrintError(void)
 {
 	if (g_ok == 0)
 		return 0;

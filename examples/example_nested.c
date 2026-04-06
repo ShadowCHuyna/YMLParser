@@ -126,7 +126,7 @@ int main(void)
 	YMLValue *services = YMLMapGet(root->value.object, "services", .ok = &ok, .type = YML_ARRAY);
 	if (ok != 0)
 	{
-		YMLErrorPrint();
+		YMLPrintError();
 		YMLDestroy(root);
 		return 1;
 	}
@@ -178,7 +178,7 @@ int main(void)
 	YMLValue *primary = YMLMapGet(db->value.object, "primary", .ok = &ok);
 	if (ok != 0)
 	{
-		YMLErrorPrint();
+		YMLPrintError();
 		YMLDestroy(root);
 		return 1;
 	}

@@ -61,15 +61,15 @@ int main(void)
 	YMLDestroy(root);
 
 	/* ═══════════════════════════════════════════════════════════════════
-	 * 2. Паттерн Б: глобальное состояние + YMLErrorPrint в конце блока
+	 * 2. Паттерн Б: глобальное состояние + YMLPrintError в конце блока
 	 * ═══════════════════════════════════════════════════════════════════ */
-	printf("\n=== 2. Глобальное состояние (YMLErrorPrint) ===\n");
+	printf("\n=== 2. Глобальное состояние (YMLPrintError) ===\n");
 
 	root = YMLParse("x: 1\ny: 2\n");
 	YMLValue *x = YMLMapGet(root->value.object, "x");
 	YMLValue *y = YMLMapGet(root->value.object, "y");
 	/* Один вызов в конце: если что-то пошло не так — напечатает и вернёт код. */
-	if (YMLErrorPrint() != 0)
+	if (YMLPrintError() != 0)
 	{
 		YMLDestroy(root);
 		return 1;
