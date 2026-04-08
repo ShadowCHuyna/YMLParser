@@ -13,6 +13,7 @@
    - [YMLParseStream](#ymlparsestream)
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
+   - [YMLMapGetTyped](#ymlmapgettyped)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
    - [YMLPrintError](#ymlerrorprint)
@@ -198,6 +199,40 @@ YMLMapGet(root->value.object, "server/host", .splitter='/');
 - `ok=2` — тип последнего ключа не совпадает с `.type`
 
 > Ключи, буквально содержащие символ-разделитель, не поддерживаются при использовании `.splitter`. Для таких ключей используйте обычный `YMLMapGet`.
+
+---
+
+### YMLMapGetTyped
+
+```c
+TYPE YMLMapGetTyped(void *object, const char *key, YMLValueType TYPE, ...options...);
+```
+
+Аналог `YMLMapGet`, но возвращает C-значение напрямую, без обёртки `YMLValue*`. Тип возврата определяется на этапе компиляции через `_Generic` по параметру `TYPE`:
+
+| `TYPE` | Тип возврата |
+|--------|-------------|
+| `YML_BOOL` | `bool` |
+| `YML_INT` | `int64_t` |
+| `YML_FLOAT` | `double` |
+| `YML_STRING` | `const char*` |
+| `YML_ARRAY` | `YMLValue*` |
+| `YML_OBJECT` | `void*` |
+
+`.type=TYPE` выставляется автоматически. Опциональные аргументы (`.ok`, `.error`, `.splitter`) передаются в `YMLMapGet` как есть.
+
+> **Внимание:** если ключ не найден или тип не совпадает, `YMLMapGet` вернёт `YMLVallue` `{.type=YML_NULL, .value=NULL}`
+
+```c
+int ok;
+
+int64_t     age  = YMLMapGetTyped(root->value.object, "age",   YML_INT,    .ok=&ok);
+const char *name = YMLMapGetTyped(root->value.object, "name",  YML_STRING, .ok=&ok);
+double      x    = YMLMapGetTyped(root->value.object, "score", YML_FLOAT);
+
+// работает и с обходом по пути
+const char *city = YMLMapGetTyped(root->value.object, "address.city", YML_STRING, .splitter='.');
+```
 
 ---
 

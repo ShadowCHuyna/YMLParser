@@ -15,6 +15,7 @@ A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define 
    - [YMLParseStream](#ymlparsestream)
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
+   - [YMLMapGetTyped](#ymlmapgettyped)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
    - [YMLPrintError](#ymlerrorprint)
@@ -200,6 +201,40 @@ Error codes with `.splitter`:
 - `ok=2` — type mismatch on the final key
 
 > Keys that literally contain the separator character are not supported when using `.splitter`. Use plain `YMLMapGet` calls for such keys.
+
+---
+
+### YMLMapGetTyped
+
+```c
+TYPE YMLMapGetTyped(void *object, const char *key, YMLValueType TYPE, ...options...);
+```
+
+Like `YMLMapGet`, but returns the underlying C value directly instead of `YMLValue*`. The return type is resolved at compile time via `_Generic` based on `TYPE`:
+
+| `TYPE` | Return type |
+|--------|-------------|
+| `YML_BOOL` | `bool` |
+| `YML_INT` | `int64_t` |
+| `YML_FLOAT` | `double` |
+| `YML_STRING` | `const char*` |
+| `YML_ARRAY` | `YMLValue*` |
+| `YML_OBJECT` | `void*` |
+
+Sets `.type=TYPE` automatically. Optional args (`.ok`, `.error`, `.splitter`) are forwarded to `YMLMapGet`.
+
+> **Warning:** if the key is not found or the type does not match, `YMLMapGet` returns `YMLVallue` `{.type=YML_NULL, .value=NULL}`
+
+```c
+int ok;
+
+int64_t     age  = YMLMapGetTyped(root->value.object, "age",   YML_INT,    .ok=&ok);
+const char *name = YMLMapGetTyped(root->value.object, "name",  YML_STRING, .ok=&ok);
+double      x    = YMLMapGetTyped(root->value.object, "score", YML_FLOAT);
+
+// dot-path traversal works too
+const char *city = YMLMapGetTyped(root->value.object, "address.city", YML_STRING, .splitter='.');
+```
 
 ---
 
