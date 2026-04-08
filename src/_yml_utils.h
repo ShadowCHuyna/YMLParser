@@ -10,6 +10,7 @@
  */
 
 #include "YMLParser.h"
+#include "_allocator_wraper.h"
 #include "_hm.h"
 #include "_da.h"
 #include <stdlib.h>
@@ -21,7 +22,7 @@
 static inline char *yml_strdup(const char *s)
 {
 	size_t n = strlen(s) + 1;
-	char *copy = (char *)malloc(n);
+	char *copy = (char *)YMLALLOC(n);
 	if (copy)
 		memcpy(copy, s, n);
 	return copy;
@@ -41,7 +42,7 @@ static inline void yml_value_free_impl(YMLValue *v)
 	switch (v->type)
 	{
 	case YML_STRING:
-		free((char *)v->value.string);
+		YMLDEALLOC((char *)v->value.string);
 		break;
 	case YML_ARRAY:
 	{

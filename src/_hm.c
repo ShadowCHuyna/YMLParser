@@ -1,6 +1,7 @@
 #include "_hm.h"
 #include "_da.h"
 #include "_yml_utils.h"
+#include "_allocator_wraper.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,14 +31,14 @@ static size_t next_pow2(size_t n)
 
 YML_PRIVATE _hm *hm_new(size_t cap)
 {
-	_hm *hm = malloc(sizeof(_hm));
+	_hm *hm = YMLALLOC(sizeof(_hm));
 	if (!hm)
 		return NULL;
 	cap = next_pow2(cap < 4 ? 4 : cap);
-	hm->entries = calloc(cap, sizeof(_hm_entry));
+	hm->entries = YMLCALLOC(cap, sizeof(_hm_entry));
 	if (!hm->entries)
 	{
-		free(hm);
+		YMLDEALLOC(hm);
 		return NULL;
 	}
 	hm->cap = cap;
@@ -49,7 +50,7 @@ YML_PRIVATE _hm *hm_new(size_t cap)
 static bool hm_grow(_hm *hm)
 {
 	size_t new_cap = hm->cap * 2;
-	_hm_entry *new_entries = calloc(new_cap, sizeof(_hm_entry));
+	_hm_entry *new_entries = YMLCALLOC(new_cap, sizeof(_hm_entry));
 	if (!new_entries)
 		return false;
 	for (size_t i = 0; i < hm->cap; i++)
@@ -61,7 +62,7 @@ static bool hm_grow(_hm *hm)
 			idx = (idx + 1) & (new_cap - 1);
 		new_entries[idx] = hm->entries[i];
 	}
-	free(hm->entries);
+	YMLDEALLOC(hm->entries);
 	hm->entries = new_entries;
 	hm->cap = new_cap;
 	return true;
@@ -126,9 +127,9 @@ YML_PRIVATE void hm_free(_hm *hm)
 	{
 		if (!hm->entries[i].key)
 			continue;
-		free(hm->entries[i].key);
+		YMLDEALLOC(hm->entries[i].key);
 		yml_value_free_impl(&hm->entries[i].value);
 	}
-	free(hm->entries);
-	free(hm);
+	YMLDEALLOC(hm->entries);
+	YMLDEALLOC(hm);
 }

@@ -23,13 +23,13 @@ int main(void)
 	SECTION("YMLMapGet type mismatch → ok=2");
 	v = YMLMapGet(root->value.object, "n", .type = YML_STRING, .ok = &ok, .error = &error);
 	CHECK(ok == 2, "ok=2 on mismatch");
-	CHECK(v == NULL, "returns NULL");
+	CHECK(v && v->type == YML_NULL, "returns YML_NULL sentinel");
 	CHECK(error && error[0], "error message set");
 
 	SECTION("YMLMapGet missing key → ok=1");
 	v = YMLMapGet(root->value.object, "missing", .ok = &ok, .error = &error);
 	CHECK(ok == 1, "ok=1 on missing");
-	CHECK(v == NULL, "returns NULL");
+	CHECK(v && v->type == YML_NULL, "returns YML_NULL sentinel");
 
 	SECTION("YMLMapGet default type = YML_ANY");
 	v = YMLMapGet(root->value.object, "n");
@@ -112,25 +112,25 @@ int main(void)
 	SECTION("splitter missing intermediate key");
 	root = YMLParse("outer:\n  inner: 1\n", .ok = &ok);
 	v = YMLMapGet(root->value.object, "missing.inner", .ok = &ok, .splitter = '.');
-	CHECK(ok == 1 && v == NULL, "missing intermediate ok=1");
+	CHECK(ok == 1 && v && v->type == YML_NULL, "missing intermediate ok=1");
 	YMLDestroy(root);
 
 	SECTION("splitter missing final key");
 	root = YMLParse("outer:\n  inner: 1\n", .ok = &ok);
 	v = YMLMapGet(root->value.object, "outer.nokey", .ok = &ok, .splitter = '.');
-	CHECK(ok == 1 && v == NULL, "missing final ok=1");
+	CHECK(ok == 1 && v && v->type == YML_NULL, "missing final ok=1");
 	YMLDestroy(root);
 
 	SECTION("splitter intermediate not object");
 	root = YMLParse("a: 42\n", .ok = &ok);
 	v = YMLMapGet(root->value.object, "a.b", .ok = &ok, .splitter = '.');
-	CHECK(ok == 1 && v == NULL, "not an object ok=1");
+	CHECK(ok == 1 && v && v->type == YML_NULL, "not an object ok=1");
 	YMLDestroy(root);
 
 	SECTION("splitter type mismatch");
 	root = YMLParse("outer:\n  n: 10\n", .ok = &ok);
 	v = YMLMapGet(root->value.object, "outer.n", .ok = &ok, .splitter = '.', .type = YML_STRING);
-	CHECK(ok == 2 && v == NULL, "type mismatch ok=2");
+	CHECK(ok == 2 && v && v->type == YML_NULL, "type mismatch ok=2");
 	YMLDestroy(root);
 
 	SECTION("splitter single segment behaves like normal get");

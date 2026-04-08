@@ -25,7 +25,7 @@ static YMLValue _yml_mk_node(YMLValue *v)
 	if (!cp)
 		return (YMLValue){.type = YML_NULL};
 	YMLValue r = *cp;
-	free(cp);
+	YMLDEALLOC(cp);
 	return r;
 }
 
@@ -33,13 +33,13 @@ static YMLValue _yml_mk_node(YMLValue *v)
 
 YMLValue *_YMLCreate(void)
 {
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 		return NULL;
 	_hm *hm = hm_new(8);
 	if (!hm)
 	{
-		free(v);
+		YMLDEALLOC(v);
 		return NULL;
 	}
 	v->type = YML_OBJECT;
@@ -49,13 +49,13 @@ YMLValue *_YMLCreate(void)
 
 YMLValue *_YMLCreateArr(void)
 {
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 		return NULL;
 	YMLValue *arr = da_new(YMLValue, 4);
 	if (!arr)
 	{
-		free(v);
+		YMLDEALLOC(v);
 		return NULL;
 	}
 	v->type = YML_ARRAY;

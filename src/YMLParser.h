@@ -391,3 +391,14 @@ int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptio
 #define YMLWriteBuf(obj, buf, cap, ...) \
 	_YMLWriteBuf(obj, buf, cap, \
 		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
+
+
+struct _YMLParserAllocator {
+	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
+	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
+	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
+	void  (*dealloc)(void* ptr,                 void* ctx, const char* FILE, int LINE);
+	void* ctx;
+};
+
+extern struct _YMLParserAllocator YMLParserAllocator;

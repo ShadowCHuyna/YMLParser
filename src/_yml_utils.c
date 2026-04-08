@@ -6,7 +6,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 {
 	if (!src)
 		return NULL;
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 		return NULL;
 	v->type = src->type;
@@ -31,7 +31,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 			if (cp)
 			{
 				da_push(arr, *cp);
-				free(cp);
+				YMLDEALLOC(cp);
 			}
 		}
 		v->value.array = arr;
@@ -50,7 +50,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 			if (cp)
 			{
 				hm_set(dst_hm, key, *cp);
-				free(cp);
+				YMLDEALLOC(cp);
 			}
 		}
 		v->value.object = dst_hm;

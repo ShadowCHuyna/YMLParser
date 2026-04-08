@@ -22,8 +22,9 @@
    - [YMLArrPush / YMLArrPushNull / YMLArrPushArr](#ymlarrpush--ymlarrpushnull--ymlarrpusharr)
    - [YMLWriteStream / YMLWriteBuf](#ymlwritestream--ymlwritebuf)
 3. [Обработка ошибок](#обработка-ошибок)
-4. [Сборка](#сборка)
-5. [Что не поддерживается](#что-не-поддерживается)
+4. [Кастомный аллокатор](#кастомный-аллокатор)
+5. [Сборка](#сборка)
+6. [Что не поддерживается](#что-не-поддерживается)
 
 ---
 
@@ -454,6 +455,49 @@ if (YMLErrorPrint() != 0) return 1;
 
 ---
 
+## Кастомный аллокатор
+
+По умолчанию все операции с кучей (`malloc`, `realloc`, `calloc`, `free`) идут через стандартную библиотеку C. Заменить их можно глобально — присвоить `YMLParserAllocator` до первого вызова функций парсера:
+
+```c
+#define YMLPARSER_IMPLEMENTATION
+#include "YMLParser.h"
+
+static void *my_alloc  (size_t len,              void *ctx, const char *file, int line);
+static void *my_realloc(void *ptr, size_t len,   void *ctx, const char *file, int line);
+static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, int line);
+static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
+
+// вызвать до любого YMLParse / YMLCreate
+YMLParserAllocator = (struct _YMLParserAllocator){
+    .alloc   = my_alloc,
+    .realloc = my_realloc,
+    .calloc  = my_calloc,
+    .dealloc = my_free,
+    .ctx     = NULL,   // передаётся в каждый вызов; подходит для arena-указателя и т.п.
+};
+```
+
+Структура объявлена в `YMLParser.h`:
+
+```c
+struct _YMLParserAllocator {
+    void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
+    void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
+    void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
+    void  (*dealloc)(void *ptr,                void *ctx, const char *file, int line);
+    void *ctx;
+};
+
+extern struct _YMLParserAllocator YMLParserAllocator;
+```
+
+`file` и `line` — это `__FILE__` / `__LINE__` на месте вызова, полезны для диагностики и отслеживания утечек. Если не нужны — просто игнорировать.
+
+> Аллокатор — обычная глобальная переменная, не `_Thread_local`. При многопоточном использовании — установить один раз при старте, до создания потоков.
+
+---
+
 ## Сборка
 
 ### Single-header (рекомендуется)
@@ -487,7 +531,8 @@ make lib-shared PLATFORM=windows   # Windows → build/YMLParser.dll
 
 ```sh
 gcc -std=c11 -Isrc -o my_app my_app.c \
-    src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c -lm
+    src/YMLParser.c src/YMLWriter.c src/_da.c src/_hm.c \
+    src/_lexer.c src/_yml_utils.c src/_allocator_wraper.c -lm
 ```
 
 > `-lm` обязателен — нужен `HUGE_VAL` / `NAN` из `<math.h>`.

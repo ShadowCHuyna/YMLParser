@@ -1,4 +1,5 @@
 #include "_da.h"
+#include "_allocator_wraper.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -6,7 +7,7 @@ YML_PRIVATE void *_da_new(size_t elem_size, size_t cap)
 {
 	if (cap == 0)
 		cap = 4;
-	_da_hdr *hdr = malloc(sizeof(_da_hdr) + elem_size * cap);
+	_da_hdr *hdr = YMLALLOC(sizeof(_da_hdr) + elem_size * cap);
 	if (!hdr)
 		return NULL;
 	hdr->len = 0;
@@ -20,7 +21,7 @@ YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size)
 	if (hdr->len == hdr->cap)
 	{
 		size_t new_cap = hdr->cap * 2;
-		_da_hdr *new_hdr = realloc(hdr, sizeof(_da_hdr) + elem_size * new_cap);
+		_da_hdr *new_hdr = YMLREALLOC(hdr, sizeof(_da_hdr) + elem_size * new_cap);
 		if (!new_hdr)
 			return NULL; /* старый блок жив, cap не тронут */
 		new_hdr->cap = new_cap;
@@ -35,5 +36,5 @@ YML_PRIVATE void _da_free(void *da)
 {
 	if (!da)
 		return;
-	free((_da_hdr *)da - 1);
+	YMLDEALLOC((_da_hdr *)da - 1);
 }

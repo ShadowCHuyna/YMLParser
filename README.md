@@ -24,8 +24,9 @@ A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define 
    - [YMLArrPush / YMLArrPushNull / YMLArrPushArr](#ymlarrpush--ymlarrpushnull--ymlarrpusharr)
    - [YMLWriteStream / YMLWriteBuf](#ymlwritestream--ymlwritebuf)
 3. [Error handling](#error-handling)
-4. [Build](#build)
-5. [What is not supported](#what-is-not-supported)
+4. [Custom allocator](#custom-allocator)
+5. [Build](#build)
+6. [What is not supported](#what-is-not-supported)
 
 ---
 
@@ -456,6 +457,49 @@ Error state is `_Thread_local` — each thread sees only its own errors.
 
 ---
 
+## Custom allocator
+
+By default all heap operations (`malloc`, `realloc`, `calloc`, `free`) go through the C standard library. You can replace them globally before calling any parser function by assigning to `YMLParserAllocator`:
+
+```c
+#define YMLPARSER_IMPLEMENTATION
+#include "YMLParser.h"
+
+static void *my_alloc  (size_t len,              void *ctx, const char *file, int line);
+static void *my_realloc(void *ptr, size_t len,   void *ctx, const char *file, int line);
+static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, int line);
+static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
+
+// call before any YMLParse / YMLCreate
+YMLParserAllocator = (struct _YMLParserAllocator){
+    .alloc   = my_alloc,
+    .realloc = my_realloc,
+    .calloc  = my_calloc,
+    .dealloc = my_free,
+    .ctx     = NULL,   // forwarded to every call; use for arena pointer, etc.
+};
+```
+
+The struct is defined in `YMLParser.h`:
+
+```c
+struct _YMLParserAllocator {
+    void* (*alloc)  (size_t len,              void *ctx, const char *file, int line);
+    void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
+    void* (*calloc) (size_t n,  size_t size,  void *ctx, const char *file, int line);
+    void  (*dealloc)(void *ptr,               void *ctx, const char *file, int line);
+    void *ctx;
+};
+
+extern struct _YMLParserAllocator YMLParserAllocator;
+```
+
+`file` and `line` are the call-site `__FILE__` / `__LINE__` — useful for diagnostics and leak tracking. Ignore them if not needed.
+
+> The allocator is a plain global variable, not thread-local. If multiple threads call the parser concurrently, set the allocator once at startup before spawning threads.
+
+---
+
 ## Build
 
 ### Single-header (recommended)
@@ -489,7 +533,8 @@ Compile manually against `src/`:
 
 ```sh
 gcc -std=c11 -Isrc -o my_app my_app.c \
-    src/YMLParser.c src/_da.c src/_hm.c src/_lexer.c -lm
+    src/YMLParser.c src/YMLWriter.c src/_da.c src/_hm.c \
+    src/_lexer.c src/_yml_utils.c src/_allocator_wraper.c -lm
 ```
 
 > `-lm` is required for `HUGE_VAL` / `NAN` from `<math.h>`.

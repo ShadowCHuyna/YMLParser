@@ -63,7 +63,7 @@ static void anchors_clear(Parser *p)
 {
 	for (size_t i = 0; i < da_len(p->anchors); i++)
 	{
-		free(p->anchors[i].name);
+		YMLDEALLOC(p->anchors[i].name);
 		_YMLDestroy(p->anchors[i].node, (struct _YMLOptionals){0});
 	}
 	((_da_hdr *)p->anchors - 1)->len = 0;
@@ -90,7 +90,7 @@ static void parse_error(Parser *p, const char *msg)
 /* Скопировать value/value_len токена в heap (NUL-terminated). */
 static char *token_strdup(const Token *t)
 {
-	char *s = malloc(t->value_len + 1);
+	char *s = YMLALLOC(t->value_len + 1);
 	if (!s)
 		return NULL;
 	memcpy(s, t->value, t->value_len);
@@ -289,7 +289,7 @@ static YMLValue infer_scalar(const char *s, size_t len)
 	}
 
 	/* string */
-	char *copy = malloc(len + 1);
+	char *copy = YMLALLOC(len + 1);
 	if (copy)
 	{
 		memcpy(copy, s, len);
@@ -354,7 +354,7 @@ static uint32_t parse_hex_n(const char *s, int n)
  */
 static char *unescape_double_quoted(const char *src, size_t len)
 {
-	char *buf = malloc(len + 1);
+	char *buf = YMLALLOC(len + 1);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -447,7 +447,7 @@ static char *unescape_double_quoted(const char *src, size_t len)
  */
 static char *unescape_single_quoted(const char *src, size_t len)
 {
-	char *buf = malloc(len + 1);
+	char *buf = YMLALLOC(len + 1);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -471,7 +471,7 @@ static char *unescape_single_quoted(const char *src, size_t len)
  */
 static char *fold_scalar(const char *src, size_t len)
 {
-	char *buf = malloc(len + 1);
+	char *buf = YMLALLOC(len + 1);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -514,7 +514,7 @@ static char *fold_scalar(const char *src, size_t len)
 
 static void anchor_add(Parser *p, const char *name, size_t name_len, YMLValue *node)
 {
-	char *n = malloc(name_len + 1);
+	char *n = YMLALLOC(name_len + 1);
 	if (!n)
 		return;
 	memcpy(n, name, name_len);
@@ -616,7 +616,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 		{
 			char *end;
 			int64_t n = strtoll(v->value.string, &end, 0);
-			free((char *)v->value.string);
+			YMLDEALLOC((char *)v->value.string);
 			v->type = YML_INT;
 			v->value.integer = n;
 		}
@@ -638,7 +638,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 		else if (v->type == YML_INT)
 			b = v->value.integer != 0;
 		if (v->type == YML_STRING)
-			free((char *)v->value.string);
+			YMLDEALLOC((char *)v->value.string);
 		v->type = YML_BOOL;
 		v->value.boolean = b;
 		return;
@@ -657,7 +657,7 @@ static YMLValue *parse_scalar(Parser *p)
 	}
 	advance(p);
 
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 	{
 		parse_error(p, "OOM");
@@ -679,7 +679,7 @@ static YMLValue *parse_scalar(Parser *p)
 		break;
 	case SCALAR_LITERAL:
 		v->type = YML_STRING;
-		v->value.string = malloc(t->value_len + 1);
+		v->value.string = YMLALLOC(t->value_len + 1);
 		if (v->value.string)
 		{
 			memcpy((char *)v->value.string, t->value, t->value_len);
@@ -687,7 +687,7 @@ static YMLValue *parse_scalar(Parser *p)
 		}
 		if (t->owns_value)
 		{
-			free((char *)t->value);
+			YMLDEALLOC((char *)t->value);
 			t->value = NULL;
 		}
 		break;
@@ -696,7 +696,7 @@ static YMLValue *parse_scalar(Parser *p)
 		v->value.string = fold_scalar(t->value, t->value_len);
 		if (t->owns_value)
 		{
-			free((char *)t->value);
+			YMLDEALLOC((char *)t->value);
 			t->value = NULL;
 		}
 		break;
@@ -709,7 +709,7 @@ static YMLValue *parse_scalar(Parser *p)
 static YMLValue *parse_flow_sequence(Parser *p)
 {
 	advance(p); /* skip [ */
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 	{
 		parse_error(p, "OOM");
@@ -729,7 +729,7 @@ static YMLValue *parse_flow_sequence(Parser *p)
 		if (p->ok || !elem)
 			break;
 		da_push(v->value.array, *elem);
-		free(elem);
+		YMLDEALLOC(elem);
 	}
 	if (cur(p)->type != TK_FLOW_SEQ_END)
 		parse_error(p, "unclosed '['");
@@ -744,7 +744,7 @@ static YMLValue *parse_flow_mapping(Parser *p)
 {
 	advance(p); /* skip { */
 	_hm *hm = hm_new(8);
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v || !hm)
 	{
 		parse_error(p, "OOM");
@@ -776,7 +776,7 @@ static YMLValue *parse_flow_mapping(Parser *p)
 
 		if (cur(p)->type != TK_MAP_VAL)
 		{
-			free(key);
+			YMLDEALLOC(key);
 			parse_error(p, "expected ':' in flow mapping");
 			break;
 		}
@@ -785,12 +785,12 @@ static YMLValue *parse_flow_mapping(Parser *p)
 		YMLValue *val = parse_node(p, 0);
 		if (p->ok || !val)
 		{
-			free(key);
+			YMLDEALLOC(key);
 			break;
 		}
 		hm_set(hm, key, *val);
-		free(key);
-		free(val);
+		YMLDEALLOC(key);
+		YMLDEALLOC(val);
 	}
 	if (cur(p)->type != TK_FLOW_MAP_END)
 		parse_error(p, "unclosed '{'");
@@ -803,7 +803,7 @@ static YMLValue *parse_flow_mapping(Parser *p)
 
 static YMLValue *parse_block_sequence(Parser *p, int indent)
 {
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
 	{
 		parse_error(p, "OOM");
@@ -827,7 +827,7 @@ static YMLValue *parse_block_sequence(Parser *p, int indent)
 		if (p->ok || !elem)
 			break;
 		da_push(v->value.array, *elem);
-		free(elem);
+		YMLDEALLOC(elem);
 	}
 	return v;
 }
@@ -856,7 +856,7 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 				if (cp)
 				{
 					hm_set(dst, key, *cp);
-					free(cp);
+					YMLDEALLOC(cp);
 				}
 			}
 		}
@@ -873,7 +873,7 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 static YMLValue *parse_block_mapping(Parser *p, int indent)
 {
 	_hm *hm = hm_new(8);
-	YMLValue *v = malloc(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v || !hm)
 	{
 		parse_error(p, "OOM");
@@ -916,11 +916,11 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 			YMLValue null_v = {.type = YML_NULL};
 			if (strcmp(key, "<<") == 0)
 			{
-				free(key);
+				YMLDEALLOC(key);
 				continue;
 			}
 			hm_set(hm, key, null_v);
-			free(key);
+			YMLDEALLOC(key);
 			continue;
 		}
 		advance(p); /* skip : */
@@ -930,7 +930,7 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		if (cur(p)->type == TK_EOF || cur(p)->type == TK_DOC_END ||
 			cur(p)->type == TK_DOC_START)
 		{
-			val = malloc(sizeof(YMLValue));
+			val = YMLALLOC(sizeof(YMLValue));
 			if (val)
 				val->type = YML_NULL;
 		}
@@ -940,7 +940,7 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		}
 		if (p->ok || !val)
 		{
-			free(key);
+			YMLDEALLOC(key);
 			break;
 		}
 
@@ -952,9 +952,9 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		else
 		{
 			hm_set(hm, key, *val);
-			free(val);
+			YMLDEALLOC(val);
 		}
-		free(key);
+		YMLDEALLOC(key);
 	}
 	return v;
 }
@@ -1031,14 +1031,14 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 	}
 	else if (t->type == TK_EOF || t->type == TK_DOC_END || t->type == TK_DOC_START)
 	{
-		v = malloc(sizeof(YMLValue));
+		v = YMLALLOC(sizeof(YMLValue));
 		if (v)
 			v->type = YML_NULL;
 	}
 	else
 	{
 		/* неожиданный токен — пустое значение */
-		v = malloc(sizeof(YMLValue));
+		v = YMLALLOC(sizeof(YMLValue));
 		if (v)
 			v->type = YML_NULL;
 	}
@@ -1107,7 +1107,7 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 	}
 
 	for (size_t i = 0; i < da_len(p.anchors); i++)
-		free(p.anchors[i].name);
+		YMLDEALLOC(p.anchors[i].name);
 	da_free(p.anchors);
 	da_free(tokens);
 
@@ -1162,7 +1162,7 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals)
 	/* освободить имена и deep-copy ноды якорей */
 	for (size_t i = 0; i < da_len(p.anchors); i++)
 	{
-		free(p.anchors[i].name);
+		YMLDEALLOC(p.anchors[i].name);
 		_YMLDestroy(p.anchors[i].node, (struct _YMLOptionals){0});
 	}
 	da_free(p.anchors);
@@ -1180,7 +1180,7 @@ void _YMLDestroy(YMLValue *root, struct _YMLOptionals optionals)
 	if (!root)
 		return;
 	yml_value_free_impl(root);
-	free(root);
+	YMLDEALLOC(root);
 	if (optionals.ok)
 		*optionals.ok = 0;
 }
@@ -1217,7 +1217,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 	if (optionals.splitter != 0)
 	{
 		size_t len = strlen(key);
-		char *buf = malloc(len + 1);
+		char *buf = YMLALLOC(len + 1);
 		if (!buf)
 		{
 			set_error(2, "YMLMapGet: OOM");
@@ -1244,7 +1244,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			{
 				snprintf(g_error, sizeof(g_error), "YMLMapGet: key '%s' not found", seg);
 				g_ok = 1;
-				free(buf);
+				YMLDEALLOC(buf);
 				if (optionals.ok)
 					*optionals.ok = g_ok;
 				if (optionals.error)
@@ -1253,7 +1253,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			}
 			if (is_last)
 			{
-				free(buf);
+				YMLDEALLOC(buf);
 				if (optionals.type != YML_ANY && v->type != optionals.type)
 				{
 					snprintf(g_error, sizeof(g_error),
