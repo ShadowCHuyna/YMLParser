@@ -150,6 +150,29 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
 #define YMLMapGet(object, key, ...) \
 	_YMLMapGet(object, key, (struct _YMLOptionals){.ok = NULL, .error = NULL, .type = YML_ANY, .splitter = 0, __VA_ARGS__})
 
+
+#define __YML_CTYPE_YML_BOOL    bool
+#define __YML_CTYPE_YML_INT     int64_t
+#define __YML_CTYPE_YML_FLOAT   double
+#define __YML_CTYPE_YML_STRING  const char*
+#define __YML_CTYPE_YML_ARRAY   YMLValue*
+#define __YML_CTYPE_YML_OBJECT  void*
+
+#define YMLTYPE_2_CTYPE(type) \
+	__YML_CTYPE_##type
+
+
+#define YMLMapGetTyped(obj, key, TYPE, ...) \
+	_Generic(((YMLTYPE_2_CTYPE(TYPE))0), \
+		double:        YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.number, \
+		int64_t:       YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.integer, \
+		bool:          YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.boolean, \
+		const char*:   YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.string, \
+		char*:         YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.string, \
+		void*:         YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.object, \
+		YMLValue*:     YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.array \
+	)
+
 /*
  * Iterator over key-value pairs of a YML_OBJECT.
  * Used internally by the YMLMapForech macro.

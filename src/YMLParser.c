@@ -1197,6 +1197,9 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals)
 		*optionals.ok = 0;
 }
 
+// NULL - нода чтобы небыло segfold если ключ не найден
+static YMLValue YMLNULLVallue = {.type=YML_NULL, .value=NULL}; 
+
 YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 {
 	g_ok = 0;
@@ -1208,7 +1211,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			*optionals.ok = g_ok;
 		if (optionals.error)
 			*optionals.error = g_error;
-		return NULL;
+		return &YMLNULLVallue;
 	}
 
 	if (optionals.splitter != 0)
@@ -1222,7 +1225,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 				*optionals.ok = g_ok;
 			if (optionals.error)
 				*optionals.error = g_error;
-			return NULL;
+			return &YMLNULLVallue;
 		}
 		memcpy(buf, key, len + 1);
 
@@ -1246,7 +1249,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 					*optionals.ok = g_ok;
 				if (optionals.error)
 					*optionals.error = g_error;
-				return NULL;
+				return &YMLNULLVallue;
 			}
 			if (is_last)
 			{
@@ -1261,7 +1264,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 						*optionals.ok = g_ok;
 					if (optionals.error)
 						*optionals.error = g_error;
-					return NULL;
+					return &YMLNULLVallue;
 				}
 				if (optionals.ok)
 					*optionals.ok = 0;
@@ -1276,7 +1279,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 					*optionals.ok = g_ok;
 				if (optionals.error)
 					*optionals.error = g_error;
-				return NULL;
+				return &YMLNULLVallue;
 			}
 			cur_hm = v->value.object;
 			seg = sep + 1;
@@ -1292,7 +1295,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			*optionals.ok = g_ok;
 		if (optionals.error)
 			*optionals.error = g_error;
-		return NULL;
+		return &YMLNULLVallue;
 	}
 	if (optionals.type != YML_ANY && v->type != optionals.type)
 	{
@@ -1304,7 +1307,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			*optionals.ok = g_ok;
 		if (optionals.error)
 			*optionals.error = g_error;
-		return NULL;
+		return &YMLNULLVallue;
 	}
 	if (optionals.ok)
 		*optionals.ok = 0;
