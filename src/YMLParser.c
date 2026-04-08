@@ -1200,6 +1200,15 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals)
 // NULL - нода чтобы небыло segfold если ключ не найден
 static YMLValue YMLNULLVallue = {.type=YML_NULL, .value=NULL}; 
 
+/* индекс = YMLValueType + 1 (YML_ANY=-1 → 0, YML_NULL=0 → 1, …) */
+static const char *const _yml_type_names[] = {
+	"YML_ANY", "YML_NULL", "YML_BOOL", "YML_INT",
+	"YML_FLOAT", "YML_STRING", "YML_ARRAY", "YML_OBJECT",
+};
+#define YML_TYPE_NAME(t) \
+	(_yml_type_names[((int)(t) + 1 < 0 || (int)(t) + 1 >= (int)(sizeof(_yml_type_names)/sizeof(*_yml_type_names))) \
+	                 ? 0 : (int)(t) + 1])
+
 YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 {
 	g_ok = 0;
@@ -1257,8 +1266,8 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 				if (optionals.type != YML_ANY && v->type != optionals.type)
 				{
 					snprintf(g_error, sizeof(g_error),
-							 "YMLMapGet: key '%s' has type %d, expected %d",
-							 seg, v->type, optionals.type);
+							 "YMLMapGet: key '%s' has type %s, expected %s",
+							 seg, YML_TYPE_NAME(v->type), YML_TYPE_NAME(optionals.type));
 					g_ok = 2;
 					if (optionals.ok)
 						*optionals.ok = g_ok;
@@ -1300,8 +1309,8 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 	if (optionals.type != YML_ANY && v->type != optionals.type)
 	{
 		snprintf(g_error, sizeof(g_error),
-				 "YMLMapGet: key '%s' has type %d, expected %d",
-				 key, v->type, optionals.type);
+				 "YMLMapGet: key '%s' has type %s, expected %s",
+				 key, YML_TYPE_NAME(v->type), YML_TYPE_NAME(optionals.type));
 		g_ok = 2;
 		if (optionals.ok)
 			*optionals.ok = g_ok;
