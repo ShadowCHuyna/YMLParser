@@ -401,4 +401,22 @@ struct YMLParserAllocator {
 	void* ctx;
 };
 
+/*
+ * YMLParserSetAllocator — replaces the global allocator used by the parser.
+ *
+ * Must be called before any YMLParse / YMLCreate / YMLDestroy.
+ * The allocator is a plain global, not thread-local: set it once at startup
+ * before spawning threads.
+ *
+ * Each hook receives the call-site FILE/LINE for diagnostics; ignore if
+ * not needed.
+ *
+ *   YMLParserSetAllocator((struct YMLParserAllocator){
+ *       .alloc   = my_alloc,
+ *       .realloc = my_realloc,
+ *       .calloc  = my_calloc,
+ *       .dealloc = my_free,
+ *       .ctx     = &my_ctx,  // forwarded to every call; NULL is fine
+ *   });
+ */
 void YMLParserSetAllocator(struct YMLParserAllocator allocator);
