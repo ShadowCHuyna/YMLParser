@@ -1,6 +1,6 @@
 #include "_lexer.h"
 #include "_da.h"
-#include "_allocator_wraper.h"
+#include "_allocator.h"
 
 #include <stdbool.h>
 #include <string.h>

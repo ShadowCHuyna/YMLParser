@@ -27,19 +27,19 @@
         " *   By default all heap operations go through malloc/realloc/calloc/free.",
         " *   Replace the global allocator before YMLPARSER_IMPLEMENTATION:",
         " *",
-        " *     YMLParserAllocator = (struct _YMLParserAllocator){",
+        " *     YMLParserSetAllocator((struct _YMLParserAllocator){",
         " *         .alloc   = my_alloc,    // void* f(size_t, void* ctx, file, line)",
         " *         .realloc = my_realloc,  // void* f(void*, size_t, void* ctx, file, line)",
         " *         .calloc  = my_calloc,   // void* f(size_t n, size_t sz, void* ctx, file, line)",
         " *         .dealloc = my_free,     // void  f(void*, void* ctx, file, line)",
         " *         .ctx     = &my_ctx,     // forwarded to every call (may be NULL)",
-        " *     };",
+        " *     });",
         " *",
         " *   __FILE__ and __LINE__ are passed for diagnostics; ignore if not needed.",
         " */"
     ],
     "impl_files": [
-        "src/_allocator_wraper.h",
+        "src/_allocator.h",
         "src/_da.h",
         "src/_hm.h",
         "src/_lexer.h",
@@ -50,11 +50,11 @@
         "src/_yml_utils.c",
         "src/YMLParser.c",
         "src/YMLWriter.c",
-        "src/_allocator_wraper.c"
+        "src/_allocator.c"
     ],
     "strip_includes": [
         "#include \"YMLParser.h\"",
-        "#include \"_allocator_wraper.h\"",
+        "#include \"_allocator.h\"",
         "#include \"_da.h\"",
         "#include \"_hm.h\"",
         "#include \"_lexer.h\"",

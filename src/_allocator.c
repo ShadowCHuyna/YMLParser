@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "_allocator_wraper.h"
+#include "_allocator.h"
 
 #include "YMLParser.h"
 
@@ -31,10 +31,14 @@ static void malloc_dealloc(void* ptr, void* ctx, const char* FILE, int LINE) {
 	free(ptr);
 }
 
-struct _YMLParserAllocator YMLParserAllocator = {
+struct YMLParserAllocator YMLParserAllocator = {
 	.alloc   = malloc_alloc,
 	.realloc = malloc_realloc,
 	.calloc  = malloc_calloc,
 	.dealloc = malloc_dealloc,
 	.ctx     = NULL
 };
+
+void YMLParserSetAllocator(struct YMLParserAllocator allocator) {
+	YMLParserAllocator = allocator;
+}

@@ -53,13 +53,13 @@ static void log_free(void *ptr, void *ctx, const char *file, int line)
 
 int main(void)
 {
-	YMLParserAllocator = (struct _YMLParserAllocator){
+	YMLParserSetAllocator((struct YMLParserAllocator){
 		.alloc   = log_alloc,
 		.realloc = log_realloc,
 		.calloc  = log_calloc,
 		.dealloc = log_free,
 		.ctx     = NULL,
-	};
+	});
 
 	const char *yml =
 		"server:\n"

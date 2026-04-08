@@ -10,7 +10,7 @@
  */
 
 #include "YMLParser.h"
-#include "_allocator_wraper.h"
+#include "_allocator.h"
 #include "_hm.h"
 #include "_da.h"
 #include <stdlib.h>

@@ -457,7 +457,7 @@ if (YMLErrorPrint() != 0) return 1;
 
 ## Кастомный аллокатор
 
-По умолчанию все операции с кучей (`malloc`, `realloc`, `calloc`, `free`) идут через стандартную библиотеку C. Заменить их можно глобально — присвоить `YMLParserAllocator` до первого вызова функций парсера:
+По умолчанию все операции с кучей (`malloc`, `realloc`, `calloc`, `free`) идут через стандартную библиотеку C. Заменить их можно глобально через `YMLParserSetAllocator` до первого вызова функций парсера:
 
 ```c
 #define YMLPARSER_IMPLEMENTATION
@@ -469,19 +469,19 @@ static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, in
 static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
 
 // вызвать до любого YMLParse / YMLCreate
-YMLParserAllocator = (struct _YMLParserAllocator){
+YMLParserSetAllocator((struct _YMLParserAllocator){
     .alloc   = my_alloc,
     .realloc = my_realloc,
     .calloc  = my_calloc,
     .dealloc = my_free,
     .ctx     = NULL,   // передаётся в каждый вызов; подходит для arena-указателя и т.п.
-};
+});
 ```
 
-Структура объявлена в `YMLParser.h`:
+Структура и функция объявлены в `YMLParser.h`:
 
 ```c
-struct _YMLParserAllocator {
+struct YMLParserAllocator {
     void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
     void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
     void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
@@ -489,7 +489,7 @@ struct _YMLParserAllocator {
     void *ctx;
 };
 
-extern struct _YMLParserAllocator YMLParserAllocator;
+void YMLParserSetAllocator(struct YMLParserAllocator allocator);
 ```
 
 `file` и `line` — это `__FILE__` / `__LINE__` на месте вызова, полезны для диагностики и отслеживания утечек. Если не нужны — просто игнорировать.
@@ -532,7 +532,7 @@ make lib-shared PLATFORM=windows   # Windows → build/YMLParser.dll
 ```sh
 gcc -std=c11 -Isrc -o my_app my_app.c \
     src/YMLParser.c src/YMLWriter.c src/_da.c src/_hm.c \
-    src/_lexer.c src/_yml_utils.c src/_allocator_wraper.c -lm
+    src/_lexer.c src/_yml_utils.c src/_allocator.c -lm
 ```
 
 > `-lm` обязателен — нужен `HUGE_VAL` / `NAN` из `<math.h>`.

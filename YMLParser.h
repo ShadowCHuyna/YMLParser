@@ -20,13 +20,13 @@
  *   By default all heap operations go through malloc/realloc/calloc/free.
  *   Replace the global allocator before YMLPARSER_IMPLEMENTATION:
  *
- *     YMLParserAllocator = (struct _YMLParserAllocator){
+ *     YMLParserSetAllocator((struct _YMLParserAllocator){
  *         .alloc   = my_alloc,    // void* f(size_t, void* ctx, file, line)
  *         .realloc = my_realloc,  // void* f(void*, size_t, void* ctx, file, line)
  *         .calloc  = my_calloc,   // void* f(size_t n, size_t sz, void* ctx, file, line)
  *         .dealloc = my_free,     // void  f(void*, void* ctx, file, line)
  *         .ctx     = &my_ctx,     // forwarded to every call (may be NULL)
- *     };
+ *     });
  *
  *   __FILE__ and __LINE__ are passed for diagnostics; ignore if not needed.
  */
@@ -430,7 +430,7 @@ int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptio
 		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
 
 
-struct _YMLParserAllocator {
+struct YMLParserAllocator {
 	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
 	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
 	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
@@ -438,13 +438,15 @@ struct _YMLParserAllocator {
 	void* ctx;
 };
 
-extern struct _YMLParserAllocator YMLParserAllocator;
+void YMLParserSetAllocator(struct YMLParserAllocator allocator);
 
 #ifdef YMLPARSER_IMPLEMENTATION
 /* YML_PRIVATE — hides internal symbols. */
 #define YML_PRIVATE static
 
-/* ── src/_allocator_wraper.h ───────────────────────────────────── */
+/* ── src/_allocator.h ──────────────────────────────────────────── */
+extern struct YMLParserAllocator YMLParserAllocator;
+
 #define YMLALLOC(len)           (YMLParserAllocator.alloc((len), YMLParserAllocator.ctx, __FILE__, __LINE__))
 #define YMLREALLOC(ptr, new_len)(YMLParserAllocator.realloc((ptr), (new_len), YMLParserAllocator.ctx, __FILE__, __LINE__))
 #define YMLCALLOC(n, size)      (YMLParserAllocator.calloc((n), (size), YMLParserAllocator.ctx, __FILE__, __LINE__))
@@ -3659,7 +3661,7 @@ int _YMLWriteBuf(YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptions o
 	return ctx.ok ? -1 : (int)ctx.pos;
 }
 
-/* ── src/_allocator_wraper.c ───────────────────────────────────── */
+/* ── src/_allocator.c ──────────────────────────────────────────── */
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -3691,13 +3693,17 @@ static void malloc_dealloc(void* ptr, void* ctx, const char* FILE, int LINE) {
 	free(ptr);
 }
 
-struct _YMLParserAllocator YMLParserAllocator = {
+struct YMLParserAllocator YMLParserAllocator = {
 	.alloc   = malloc_alloc,
 	.realloc = malloc_realloc,
 	.calloc  = malloc_calloc,
 	.dealloc = malloc_dealloc,
 	.ctx     = NULL
 };
+
+void YMLParserSetAllocator(struct YMLParserAllocator allocator) {
+	YMLParserAllocator = allocator;
+}
 
 #endif /* YMLPARSER_IMPLEMENTATION */
 

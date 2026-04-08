@@ -459,7 +459,7 @@ Error state is `_Thread_local` — each thread sees only its own errors.
 
 ## Custom allocator
 
-By default all heap operations (`malloc`, `realloc`, `calloc`, `free`) go through the C standard library. You can replace them globally before calling any parser function by assigning to `YMLParserAllocator`:
+By default all heap operations (`malloc`, `realloc`, `calloc`, `free`) go through the C standard library. You can replace them globally before calling any parser function via `YMLParserSetAllocator`:
 
 ```c
 #define YMLPARSER_IMPLEMENTATION
@@ -471,19 +471,19 @@ static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, in
 static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
 
 // call before any YMLParse / YMLCreate
-YMLParserAllocator = (struct _YMLParserAllocator){
+YMLParserSetAllocator((struct _YMLParserAllocator){
     .alloc   = my_alloc,
     .realloc = my_realloc,
     .calloc  = my_calloc,
     .dealloc = my_free,
     .ctx     = NULL,   // forwarded to every call; use for arena pointer, etc.
-};
+});
 ```
 
 The struct is defined in `YMLParser.h`:
 
 ```c
-struct _YMLParserAllocator {
+struct YMLParserAllocator {
     void* (*alloc)  (size_t len,              void *ctx, const char *file, int line);
     void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
     void* (*calloc) (size_t n,  size_t size,  void *ctx, const char *file, int line);
@@ -491,7 +491,7 @@ struct _YMLParserAllocator {
     void *ctx;
 };
 
-extern struct _YMLParserAllocator YMLParserAllocator;
+void YMLParserSetAllocator(struct YMLParserAllocator allocator);
 ```
 
 `file` and `line` are the call-site `__FILE__` / `__LINE__` — useful for diagnostics and leak tracking. Ignore them if not needed.
@@ -534,7 +534,7 @@ Compile manually against `src/`:
 ```sh
 gcc -std=c11 -Isrc -o my_app my_app.c \
     src/YMLParser.c src/YMLWriter.c src/_da.c src/_hm.c \
-    src/_lexer.c src/_yml_utils.c src/_allocator_wraper.c -lm
+    src/_lexer.c src/_yml_utils.c src/_allocator.c -lm
 ```
 
 > `-lm` is required for `HUGE_VAL` / `NAN` from `<math.h>`.
