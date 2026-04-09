@@ -31,7 +31,7 @@ static YMLValue _yml_mk_node(YMLValue *v)
 
 /* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
 
-YMLValue *_YMLCreate(void)
+YMLValue *YMLCreate(void)
 {
 	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
@@ -47,7 +47,7 @@ YMLValue *_YMLCreate(void)
 	return v;
 }
 
-YMLValue *_YMLCreateArr(void)
+YMLValue *YMLCreateArr(void)
 {
 	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
@@ -76,7 +76,7 @@ static void map_insert(YMLValue *obj, const char *key, YMLValue val)
 
 /* ── YMLMapAdd ──────────────────────────────────────────────────────── */
 
-void _YMLMapAdd_null(YMLValue *obj, const char *key)
+void YMLMapAddNull(YMLValue *obj, const char *key)
 {
 	map_insert(obj, key, (YMLValue){.type = YML_NULL});
 }
@@ -163,7 +163,7 @@ void _YMLMapAddArr_str(YMLValue *obj, const char *key,
 
 /* ── YMLArrPush ─────────────────────────────────────────────────────── */
 
-void _YMLArrPush_null(YMLValue *arr)
+void YMLArrPushNull(YMLValue *arr)
 {
 	YMLValue e = {.type = YML_NULL};
 	da_push(arr->value.array, e);

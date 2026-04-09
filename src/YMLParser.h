@@ -247,20 +247,20 @@ struct _YMLWriteOptions
  * Allocate an empty YML_OBJECT node.
  * Free with YMLDestroy.
  */
-YMLValue *_YMLCreate(void);
-#define YMLCreate() _YMLCreate()
+YMLValue *YMLCreate(void);
 
 /*
  * Allocate an empty YML_ARRAY node.
  * Free with YMLDestroy.
  */
-YMLValue *_YMLCreateArr(void);
-#define YMLCreateArr() _YMLCreateArr()
+YMLValue *YMLCreateArr(void);
 
 
 /* ── YMLMapAdd ───────────────────────────────────────────────────── */
 
-void _YMLMapAdd_null (YMLValue *obj, const char *key);
+/* Add a null value: YMLMapAddNull(obj, "key"); */
+void YMLMapAddNull (YMLValue *obj, const char *key);
+
 void _YMLMapAdd_bool (YMLValue *obj, const char *key, bool       val);
 void _YMLMapAdd_int  (YMLValue *obj, const char *key, long long  val);
 void _YMLMapAdd_float(YMLValue *obj, const char *key, double     val);
@@ -270,9 +270,6 @@ void _YMLMapAdd_node (YMLValue *obj, const char *key, YMLValue   *val);
 void _YMLMapAddArr_int  (YMLValue *obj, const char *key, const long long   *arr, size_t len);
 void _YMLMapAddArr_float(YMLValue *obj, const char *key, const double      *arr, size_t len);
 void _YMLMapAddArr_str  (YMLValue *obj, const char *key, const char *const *arr, size_t len);
-
-/* Add a null value: YMLMapAddNull(obj, "key"); */
-#define YMLMapAddNull(obj, key) _YMLMapAdd_null(obj, key)
 
 /*
  * Add a scalar or nested node. Type is inferred via _Generic.
@@ -318,7 +315,9 @@ void _YMLMapAddArr_str  (YMLValue *obj, const char *key, const char *const *arr,
 
 /* ── YMLArrPush ──────────────────────────────────────────────────── */
 
-void _YMLArrPush_null (YMLValue *arr);
+/* Push a null element: YMLArrPushNull(arr); */
+void YMLArrPushNull (YMLValue *arr);
+
 void _YMLArrPush_bool (YMLValue *arr, bool       val);
 void _YMLArrPush_int  (YMLValue *arr, long long  val);
 void _YMLArrPush_float(YMLValue *arr, double     val);
@@ -329,8 +328,6 @@ void _YMLArrPushArr_int  (YMLValue *arr, const long long   *c_arr, size_t len);
 void _YMLArrPushArr_float(YMLValue *arr, const double      *c_arr, size_t len);
 void _YMLArrPushArr_str  (YMLValue *arr, const char *const *c_arr, size_t len);
 
-/* Push a null element: YMLArrPushNull(arr); */
-#define YMLArrPushNull(arr) _YMLArrPush_null(arr)
 
 /*
  * Push a scalar or nested node.
