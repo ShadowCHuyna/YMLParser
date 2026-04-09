@@ -16,8 +16,8 @@ int main(void) {
 	);
 	if (YMLPrintError() != 0) return 1;
 
-	char *name = YMLMapGetTyped(root->value.object, "name", YML_STRING);
-	int age  = YMLMapGetTyped(root->value.object, "age", YML_INT);
+	char *name = YMLMapGetValue(root->value.object, "name", YML_STRING);
+	int age  = YMLMapGetValue(root->value.object, "age", YML_INT);
 	printf("name=%s  age=%lld\n", name, age);
 
 	YMLValue *tags = YMLMapGet(root->value.object, "tags");

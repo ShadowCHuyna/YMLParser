@@ -72,8 +72,8 @@ int main(void)
 	if (YMLPrintError() != 0) return 1;
 
 	fprintf(stderr, "\n── read values ─────────────────────────────────────\n");
-	const char *host = YMLMapGetTyped(root->value.object, "server.host", YML_STRING, .splitter = '.');
-	long long   port = YMLMapGetTyped(root->value.object, "server.port", YML_INT, .splitter = '.');
+	const char *host = YMLMapGetValue(root->value.object, "server.host", YML_STRING, .splitter = '.');
+	long long   port = YMLMapGetValue(root->value.object, "server.port", YML_INT, .splitter = '.');
 	printf("host=%s  port=%lld\n", host, port);
 
 	fprintf(stderr, "\n── YMLDestroy ──────────────────────────────────────\n");

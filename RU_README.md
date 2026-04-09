@@ -13,7 +13,7 @@
    - [YMLParseStream](#ymlparsestream)
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
-   - [YMLMapGetTyped](#ymlmapgettyped)
+   - [YMLMapGetValue](#YMLMapGetValue)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
    - [YMLPrintError](#ymlerrorprint)
@@ -43,8 +43,8 @@ int main(void) {
 	);
 	if (YMLPrintError() != 0) return 1;
 
-	char *name = YMLMapGetTyped(root->value.object, "name", YML_STRING);
-	int age  = YMLMapGetTyped(root->value.object, "age", YML_INT);
+	char *name = YMLMapGetValue(root->value.object, "name", YML_STRING);
+	int age  = YMLMapGetValue(root->value.object, "age", YML_INT);
 	printf("name=%s  age=%lld\n", name, age);
 
 	YMLValue *tags = YMLMapGet(root->value.object, "tags");
@@ -203,10 +203,10 @@ YMLMapGet(root->value.object, "server/host", .splitter='/');
 
 ---
 
-### YMLMapGetTyped
+### YMLMapGetValue
 
 ```c
-TYPE YMLMapGetTyped(void *object, const char *key, YMLValueType TYPE, ...options...);
+TYPE YMLMapGetValue(void *object, const char *key, YMLValueType TYPE, ...options...);
 ```
 
 Аналог `YMLMapGet`, но возвращает C-значение напрямую, без обёртки `YMLValue*`. Тип возврата определяется на этапе компиляции через `_Generic` по параметру `TYPE`:
@@ -227,12 +227,12 @@ TYPE YMLMapGetTyped(void *object, const char *key, YMLValueType TYPE, ...options
 ```c
 int ok;
 
-int64_t     age  = YMLMapGetTyped(root->value.object, "age",   YML_INT,    .ok=&ok);
-const char *name = YMLMapGetTyped(root->value.object, "name",  YML_STRING, .ok=&ok);
-double      x    = YMLMapGetTyped(root->value.object, "score", YML_FLOAT);
+int64_t     age  = YMLMapGetValue(root->value.object, "age",   YML_INT,    .ok=&ok);
+const char *name = YMLMapGetValue(root->value.object, "name",  YML_STRING, .ok=&ok);
+double      x    = YMLMapGetValue(root->value.object, "score", YML_FLOAT);
 
 // работает и с обходом по пути
-const char *city = YMLMapGetTyped(root->value.object, "address.city", YML_STRING, .splitter='.');
+const char *city = YMLMapGetValue(root->value.object, "address.city", YML_STRING, .splitter='.');
 ```
 
 ---

@@ -200,7 +200,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
 
 
 /*
- * YMLMapGetTyped — like YMLMapGet, but returns the C value directly instead of YMLValue*.
+ * YMLMapGetValue — like YMLMapGet, but returns the C value directly instead of YMLValue*.
  * TYPE must be one of: YML_BOOL, YML_INT, YML_FLOAT, YML_STRING, YML_ARRAY, YML_OBJECT.
  * The return type is resolved at compile time via _Generic:
  *   YML_BOOL   → bool
@@ -215,11 +215,11 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals);
  * WARNING: if the key is not found or the type does not match, YMLMapGet returns YMLVallue {.type=YML_NULL, .value=NULL}
  *
  * Examples:
- *   int64_t     age  = YMLMapGetTyped(obj, "age",   YML_INT);
- *   const char *name = YMLMapGetTyped(obj, "name",  YML_STRING, .ok=&ok);
- *   double      x    = YMLMapGetTyped(obj, "score", YML_FLOAT,  .splitter='.');
+ *   int64_t     age  = YMLMapGetValue(obj, "age",   YML_INT);
+ *   const char *name = YMLMapGetValue(obj, "name",  YML_STRING, .ok=&ok);
+ *   double      x    = YMLMapGetValue(obj, "score", YML_FLOAT,  .splitter='.');
  */
-#define YMLMapGetTyped(obj, key, TYPE, ...) \
+#define YMLMapGetValue(obj, key, TYPE, ...) \
 	_Generic(((YMLTYPE_2_CTYPE(TYPE))0), \
 		double:        YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.number, \
 		int64_t:       YMLMapGet(obj, key, .type=TYPE, __VA_ARGS__)->value.integer, \

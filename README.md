@@ -15,7 +15,7 @@ A single-header YAML 1.2.2 parser written in C11. Drop in `YMLParser.h`, define 
    - [YMLParseStream](#ymlparsestream)
    - [YMLDestroy / YMLDestroyStream](#ymldestroy--ymldestroystream)
    - [YMLMapGet](#ymlmapget)
-   - [YMLMapGetTyped](#ymlmapgettyped)
+   - [YMLMapGetValue](#YMLMapGetValue)
    - [YMLMapForech](#ymlmapforech)
    - [YMLArrayLen](#YMLArrayLen)
    - [YMLPrintError](#ymlerrorprint)
@@ -45,8 +45,8 @@ int main(void) {
 	);
 	if (YMLPrintError() != 0) return 1;
 
-	char *name = YMLMapGetTyped(root->value.object, "name", YML_STRING);
-	int age  = YMLMapGetTyped(root->value.object, "age", YML_INT);
+	char *name = YMLMapGetValue(root->value.object, "name", YML_STRING);
+	int age  = YMLMapGetValue(root->value.object, "age", YML_INT);
 	printf("name=%s  age=%lld\n", name, age);
 
 	YMLValue *tags = YMLMapGet(root->value.object, "tags");
@@ -205,10 +205,10 @@ Error codes with `.splitter`:
 
 ---
 
-### YMLMapGetTyped
+### YMLMapGetValue
 
 ```c
-TYPE YMLMapGetTyped(void *object, const char *key, YMLValueType TYPE, ...options...);
+TYPE YMLMapGetValue(void *object, const char *key, YMLValueType TYPE, ...options...);
 ```
 
 Like `YMLMapGet`, but returns the underlying C value directly instead of `YMLValue*`. The return type is resolved at compile time via `_Generic` based on `TYPE`:
@@ -229,12 +229,12 @@ Sets `.type=TYPE` automatically. Optional args (`.ok`, `.error`, `.splitter`) ar
 ```c
 int ok;
 
-int64_t     age  = YMLMapGetTyped(root->value.object, "age",   YML_INT,    .ok=&ok);
-const char *name = YMLMapGetTyped(root->value.object, "name",  YML_STRING, .ok=&ok);
-double      x    = YMLMapGetTyped(root->value.object, "score", YML_FLOAT);
+int64_t     age  = YMLMapGetValue(root->value.object, "age",   YML_INT,    .ok=&ok);
+const char *name = YMLMapGetValue(root->value.object, "name",  YML_STRING, .ok=&ok);
+double      x    = YMLMapGetValue(root->value.object, "score", YML_FLOAT);
 
 // dot-path traversal works too
-const char *city = YMLMapGetTyped(root->value.object, "address.city", YML_STRING, .splitter='.');
+const char *city = YMLMapGetValue(root->value.object, "address.city", YML_STRING, .splitter='.');
 ```
 
 ---
