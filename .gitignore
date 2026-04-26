@@ -11,3 +11,11 @@ test.c
 .test.h
 YMLWriter.md
 .claude
+
+.opencode.json
+package.json
+shell.nix
+node_modules
+package-lock.
+AGENTS.md
+package-lock.json
