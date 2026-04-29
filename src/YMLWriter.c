@@ -17,15 +17,15 @@ static YMLValue _yml_mk_str(const char *v, struct YMLAllocator* alloc)
 	return r;
 }
 
-static YMLValue _yml_mk_node(YMLValue *v)
+static YMLValue _yml_mk_node(YMLValue *v, struct YMLAllocator *target_alloc)
 {
 	if (!v)
 		return (YMLValue){.type = YML_NULL};
-	YMLValue *cp = yml_deep_copy(v);
+	YMLValue *cp = yml_deep_copy(v, target_alloc);
 	if (!cp)
 		return (YMLValue){.type = YML_NULL};
 	YMLValue r = *cp;
-	YMLDEALLOC(cp, cp->allocator);
+	YMLDEALLOC(cp, r.allocator);
 	return r;
 }
 
@@ -105,7 +105,7 @@ void _YMLMapAdd_str(YMLValue *obj, const char *key, const char *val)
 
 void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
 {
-	map_insert(obj, key, _yml_mk_node(val));
+	map_insert(obj, key, _yml_mk_node(val, obj->allocator));
 }
 
 static YMLValue *_yml_build_int_arr(const long long *arr, size_t len, struct YMLAllocator* alloc)
@@ -197,7 +197,7 @@ void _YMLArrPush_str(YMLValue *arr, const char *val)
 
 void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
 {
-	da_push(arr->value.array, _yml_mk_node(val));
+	da_push(arr->value.array, _yml_mk_node(val, arr->allocator));
 }
 
 void _YMLArrPushArr_int(YMLValue *arr, const long long *c_arr, size_t len)

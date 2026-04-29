@@ -2,11 +2,11 @@
 #include "_da.h"
 #include "_hm.h"
 
-YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src, struct YMLAllocator *target_alloc)
 {
 	if (!src)
 		return NULL;
-	struct YMLAllocator* alloc = src->allocator;
+	struct YMLAllocator* alloc = target_alloc ? target_alloc : src->allocator;
 	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
@@ -29,7 +29,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1, alloc);
 		for (size_t i = 0; i < n; i++)
 		{
-			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
+			YMLValue *cp = yml_deep_copy(&src->value.array[i], alloc);
 			if (cp)
 			{
 				da_push(arr, *cp);
@@ -48,7 +48,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		YMLValue *val;
 		while (hm_next(src_hm, &idx, &key, &val))
 		{
-			YMLValue *cp = yml_deep_copy(val);
+			YMLValue *cp = yml_deep_copy(val, alloc);
 			if (cp)
 			{
 				hm_set(dst_hm, key, *cp);

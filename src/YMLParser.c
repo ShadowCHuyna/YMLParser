@@ -514,7 +514,7 @@ static void anchor_add(Parser *p, const char *name, size_t name_len, YMLValue *n
 		return;
 	memcpy(n, name, name_len);
 	n[name_len] = '\0';
-	_anchor_entry e = {.name = n, .node = yml_deep_copy(node)};
+	_anchor_entry e = {.name = n, .node = yml_deep_copy(node, NULL)};
 	da_push(p->anchors, e);
 }
 
@@ -847,7 +847,7 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 		{
 			if (!hm_get(dst, key))
 			{
-				YMLValue *cp = yml_deep_copy(val);
+				YMLValue *cp = yml_deep_copy(val, NULL);
 				if (cp)
 				{
 					hm_set(dst, key, *cp);
@@ -988,7 +988,7 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 			return NULL;
 		}
 		advance(p);
-		v = yml_deep_copy(orig);
+		v = yml_deep_copy(orig, NULL);
 	}
 	else if (t->type == TK_FLOW_SEQ_START)
 	{

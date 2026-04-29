@@ -30,10 +30,12 @@ static inline char *yml_strdup(const char *s, struct YMLAllocator* alloc)
 
 /*
  * Рекурсивная глубокая копия YMLValue.
+ * Если target_alloc != NULL — все ноды получат этот allocator.
+ * Иначе копирует allocator из src.
  * Возвращает heap-аллоцированный YMLValue* или NULL при OOM.
  * Реализация в _yml_utils.c.
  */
-YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src);
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src, struct YMLAllocator *target_alloc);
 
 static inline void yml_value_free_impl(YMLValue *v)
 {
