@@ -47,7 +47,7 @@ static char *decode_utf16(const unsigned char *src, size_t src_bytes, bool be)
 {
 	/* Худший случай: каждый code unit → 3 байта UTF-8. */
 	size_t cap = src_bytes / 2 * 3 + 1;
-	char *buf = YMLALLOC(cap);
+	char *buf = YMLALLOC(cap, NULL);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -89,7 +89,7 @@ static char *decode_utf32(const unsigned char *src, size_t src_bytes, bool be)
 {
 	/* Худший случай: каждый codepoint → 4 байта UTF-8. */
 	size_t cap = src_bytes / 4 * 4 + 1;
-	char *buf = YMLALLOC(cap);
+	char *buf = YMLALLOC(cap, NULL);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -409,7 +409,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 
 	/* собрать строки тела */
 	size_t buf_cap = 256;
-	char *buf = YMLALLOC(buf_cap);
+	char *buf = YMLALLOC(buf_cap, NULL);
 	if (!buf)
 	{
 		l->error = "OOM";
@@ -435,7 +435,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 			if (buf_len + 1 >= buf_cap)
 			{
 				buf_cap *= 2;
-				buf = YMLREALLOC(buf, buf_cap);
+				buf = YMLREALLOC(buf, buf_cap, NULL);
 				if (!buf)
 				{
 					l->error = "OOM";
@@ -464,7 +464,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 		while (buf_len + (size_t)extra + 1 >= buf_cap)
 		{
 			buf_cap *= 2;
-			buf = YMLREALLOC(buf, buf_cap);
+			buf = YMLREALLOC(buf, buf_cap, NULL);
 			if (!buf)
 			{
 				l->error = "OOM";
@@ -482,7 +482,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 			if (buf_len + 1 >= buf_cap)
 			{
 				buf_cap *= 2;
-				buf = YMLREALLOC(buf, buf_cap);
+				buf = YMLREALLOC(buf, buf_cap, NULL);
 				if (!buf)
 				{
 					l->error = "OOM";
@@ -497,7 +497,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 		if (buf_len + 1 >= buf_cap)
 		{
 			buf_cap *= 2;
-			buf = YMLREALLOC(buf, buf_cap);
+			buf = YMLREALLOC(buf, buf_cap, NULL);
 			if (!buf)
 			{
 				l->error = "OOM";
@@ -619,10 +619,10 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 		return NULL; /* OOM при транскодировании */
 
 	Lexer l = {.src = use_src, .p = use_src, .line = 1, .col = 0, .flow_depth = 0, .error = NULL};
-	Token *tokens = da_new(Token, 64);
+	Token *tokens = da_new(Token, 64, NULL);
 	if (!tokens)
 	{
-		YMLDEALLOC(converted);
+		YMLDEALLOC(converted, NULL);
 		if (error_out)
 			*error_out = "OOM";
 		return NULL;
@@ -806,7 +806,7 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 		}
 	}
 
-	YMLDEALLOC(converted); /* NULL-safe; освобождаем UTF-8 буфер если был выделен */
+	YMLDEALLOC(converted, NULL); /* NULL-safe; освобождаем UTF-8 буфер если был выделен */
 
 	if (l.error)
 	{

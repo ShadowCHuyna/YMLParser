@@ -6,10 +6,12 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 {
 	if (!src)
 		return NULL;
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	struct YMLAllocator* alloc = src->allocator;
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
 	v->type = src->type;
+	v->allocator = alloc;
 	switch (src->type)
 	{
 	case YML_NULL:
@@ -19,19 +21,19 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		v->value = src->value;
 		break;
 	case YML_STRING:
-		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
+		v->value.string = src->value.string ? yml_strdup(src->value.string, alloc) : NULL;
 		break;
 	case YML_ARRAY:
 	{
 		size_t n = da_len(src->value.array);
-		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1);
+		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1, alloc);
 		for (size_t i = 0; i < n; i++)
 		{
 			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
 			if (cp)
 			{
 				da_push(arr, *cp);
-				YMLDEALLOC(cp);
+				YMLDEALLOC(cp, alloc);
 			}
 		}
 		v->value.array = arr;
@@ -40,7 +42,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 	case YML_OBJECT:
 	{
 		_hm *src_hm = (_hm *)src->value.object;
-		_hm *dst_hm = hm_new(src_hm->cap);
+		_hm *dst_hm = hm_new(src_hm->cap, alloc);
 		size_t idx = 0;
 		const char *key;
 		YMLValue *val;
@@ -50,7 +52,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 			if (cp)
 			{
 				hm_set(dst_hm, key, *cp);
-				YMLDEALLOC(cp);
+				YMLDEALLOC(cp, alloc);
 			}
 		}
 		v->value.object = dst_hm;

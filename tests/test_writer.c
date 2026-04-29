@@ -10,32 +10,32 @@ int main(void)
 
 	/* ── YMLCreate / YMLCreateArr ───────────────────────────────────── */
 	SECTION("YMLCreate returns YML_OBJECT");
-	YMLValue *obj = _YMLCreate();
+	YMLValue *obj = _YMLCreate(NULL);
 	CHECK(obj && obj->type == YML_OBJECT, "type");
 	YMLDestroy(obj);
 
 	SECTION("YMLCreateArr returns YML_ARRAY");
-	YMLValue *arr = _YMLCreateArr();
+	YMLValue *arr = _YMLCreateArr(NULL);
 	CHECK(arr && arr->type == YML_ARRAY, "type");
 	YMLDestroy(arr);
 
 	/* ── YMLMapAdd scalars ──────────────────────────────────────────── */
 	SECTION("YMLMapAdd int");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "n", 42);
 	YMLValue *v = YMLMapGet(obj->value.object, "n", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_INT && v->value.integer == 42, "int");
 	YMLDestroy(obj);
 
 	SECTION("YMLMapAdd double");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "f", 3.14);
 	v = YMLMapGet(obj->value.object, "f", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_FLOAT, "float type");
 	YMLDestroy(obj);
 
 	SECTION("YMLMapAdd string");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "s", "hello");
 	v = YMLMapGet(obj->value.object, "s", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_STRING, "string type");
@@ -43,14 +43,14 @@ int main(void)
 	YMLDestroy(obj);
 
 	SECTION("YMLMapAdd bool");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "b", (bool)true);
 	v = YMLMapGet(obj->value.object, "b", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_BOOL && v->value.boolean == true, "bool");
 	YMLDestroy(obj);
 
 	SECTION("YMLMapAdd null");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAddNull(obj, "n");
 	v = YMLMapGet(obj->value.object, "n", .ok = &ok);
 	CHECK(ok == 0 && v && v->type == YML_NULL, "null");
@@ -58,8 +58,8 @@ int main(void)
 
 	/* ── YMLMapAdd nested node ──────────────────────────────────────── */
 	SECTION("YMLMapAdd nested object (deep copy)");
-	obj = _YMLCreate();
-	YMLValue *inner = _YMLCreate();
+	obj = _YMLCreate(NULL);
+	YMLValue *inner = _YMLCreate(NULL);
 	YMLMapAdd(inner, "x", 99);
 	YMLMapAdd(obj, "sub", inner);
 	YMLDestroy(inner); /* оригинал можно уничтожить — был скопирован */
@@ -71,7 +71,7 @@ int main(void)
 
 	/* ── YMLMapAdd duplicate key cleanup ────────────────────────────── */
 	SECTION("YMLMapAdd overwrite key");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "k", "first");
 	YMLMapAdd(obj, "k", "second");
 	v = YMLMapGet(obj->value.object, "k", .ok = &ok);
@@ -80,7 +80,7 @@ int main(void)
 
 	/* ── YMLMapAdd C-array ──────────────────────────────────────────── */
 	SECTION("YMLMapAdd int[]");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	long long nums[] = {10, 20, 30};
 	YMLMapAddArr(obj, "arr", nums, 3);
 	v = YMLMapGet(obj->value.object, "arr", .ok = &ok);
@@ -90,7 +90,7 @@ int main(void)
 	YMLDestroy(obj);
 
 	SECTION("YMLMapAdd const char*[]");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	const char *tags[] = {"a", "b", "c"};
 	YMLMapAddArr(obj, "tags", tags, 3);
 	v = YMLMapGet(obj->value.object, "tags", .ok = &ok);
@@ -101,7 +101,7 @@ int main(void)
 
 	/* ── YMLArrPush ─────────────────────────────────────────────────── */
 	SECTION("YMLArrPush scalars");
-	arr = _YMLCreateArr();
+	arr = _YMLCreateArr(NULL);
 	YMLArrPush(arr, 1);
 	YMLArrPush(arr, "two");
 	YMLArrPush(arr, (bool)true);
@@ -114,7 +114,7 @@ int main(void)
 
 	/* ── YMLWriteBuf basic ──────────────────────────────────────────── */
 	SECTION("YMLWriteBuf simple object");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "x", 1);
 	char buf[256];
 	int n = YMLWriteBuf(obj, buf, sizeof(buf), .ok = &ok);
@@ -124,14 +124,14 @@ int main(void)
 	YMLDestroy(obj);
 
 	SECTION("YMLWriteBuf with .start=1");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "k", "v");
 	n = YMLWriteBuf(obj, buf, sizeof(buf), .ok = &ok, .start = 1);
 	CHECK(ok == 0 && strncmp(buf, "---", 3) == 0, "doc start");
 	YMLDestroy(obj);
 
 	SECTION("YMLWriteBuf buffer too small");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "key", "a very long value that won't fit");
 	char tiny[4];
 	n = YMLWriteBuf(obj, tiny, sizeof(tiny), .ok = &ok);
@@ -140,7 +140,7 @@ int main(void)
 
 	/* ── round-trip ─────────────────────────────────────────────────── */
 	SECTION("round-trip write → parse");
-	obj = _YMLCreate();
+	obj = _YMLCreate(NULL);
 	YMLMapAdd(obj, "name", "Alice");
 	YMLMapAdd(obj, "age",  (long long)30);
 	YMLMapAdd(obj, "active", (bool)true);

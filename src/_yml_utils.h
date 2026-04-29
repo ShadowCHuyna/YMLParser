@@ -19,10 +19,10 @@
 /*
  * yml_strdup — портативная замена strdup (не требует POSIX / _POSIX_C_SOURCE).
  */
-static inline char *yml_strdup(const char *s)
+static inline char *yml_strdup(const char *s, struct YMLAllocator* alloc)
 {
 	size_t n = strlen(s) + 1;
-	char *copy = (char *)YMLALLOC(n);
+	char *copy = (char *)YMLALLOC(n, alloc);
 	if (copy)
 		memcpy(copy, s, n);
 	return copy;
@@ -42,7 +42,7 @@ static inline void yml_value_free_impl(YMLValue *v)
 	switch (v->type)
 	{
 	case YML_STRING:
-		YMLDEALLOC((char *)v->value.string);
+		YMLDEALLOC((char *)v->value.string, v->allocator);
 		break;
 	case YML_ARRAY:
 	{

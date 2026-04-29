@@ -78,7 +78,8 @@ typedef struct
 {
 	size_t len;
 	size_t cap;
-} __da_header; /* must match _da_hdr in _da.h */
+	struct YMLAllocator* alloc;
+} __da_header;
 
 /*
  * Returns the number of elements in a da array.
@@ -260,19 +261,13 @@ struct _YMLWriteOptions
  * Allocate an empty YML_OBJECT node.
  * Free with YMLDestroy.
  */
-YMLValue *_YMLCreate(void);
+YMLValue *_YMLCreate(struct YMLAllocator* alloc);
 
-#define YMLCreate(...) \
-	_YMLCreate((struct _YMLWriteOptions){.ok = NULL, .error = NULL, __VA_ARGS__})
+#define YMLCreate(...) _YMLCreate(__VA_ARGS__)
 	
-/*
- * Allocate an empty YML_ARRAY node.
- * Free with YMLDestroy.
- */
-YMLValue *_YMLCreateArr(void);
+YMLValue *_YMLCreateArr(struct YMLAllocator* alloc);
 
-#define YMLCreateArr(...) \
-	_YMLCreateArr((struct _YMLWriteOptions){.ok = NULL, .error = NULL, __VA_ARGS__})
+#define YMLCreateArr(...) _YMLCreateArr(__VA_ARGS__)
 
 /* ── YMLMapAdd ───────────────────────────────────────────────────── */
 

@@ -10,10 +10,10 @@
 
 /* ── internal value constructors ───────────────────────────────────── */
 
-static YMLValue _yml_mk_str(const char *v)
+static YMLValue _yml_mk_str(const char *v, struct YMLAllocator* alloc)
 {
-	YMLValue r = {.type = YML_STRING};
-	r.value.string = v ? yml_strdup(v) : NULL;
+	YMLValue r = {.type = YML_STRING, .allocator = alloc};
+	r.value.string = v ? yml_strdup(v, alloc) : NULL;
 	return r;
 }
 
@@ -25,41 +25,43 @@ static YMLValue _yml_mk_node(YMLValue *v)
 	if (!cp)
 		return (YMLValue){.type = YML_NULL};
 	YMLValue r = *cp;
-	YMLDEALLOC(cp);
+	YMLDEALLOC(cp, cp->allocator);
 	return r;
 }
 
 /* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
 
-YMLValue *_YMLCreate(void)
+YMLValue *_YMLCreate(struct YMLAllocator* alloc)
 {
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
-	_hm *hm = hm_new(8);
+	_hm *hm = hm_new(8, alloc);
 	if (!hm)
 	{
-		YMLDEALLOC(v);
+		YMLDEALLOC(v, alloc);
 		return NULL;
 	}
 	v->type = YML_OBJECT;
 	v->value.object = hm;
+	v->allocator = alloc;
 	return v;
 }
 
-YMLValue *_YMLCreateArr(void)
+YMLValue *_YMLCreateArr(struct YMLAllocator* alloc)
 {
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
-	YMLValue *arr = da_new(YMLValue, 4);
+	YMLValue *arr = da_new(YMLValue, 4, alloc);
 	if (!arr)
 	{
-		YMLDEALLOC(v);
+		YMLDEALLOC(v, alloc);
 		return NULL;
 	}
 	v->type = YML_ARRAY;
 	v->value.array = arr;
+	v->allocator = alloc;
 	return v;
 }
 
@@ -78,27 +80,27 @@ static void map_insert(YMLValue *obj, const char *key, YMLValue val)
 
 void YMLMapAddNull(YMLValue *obj, const char *key)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_NULL});
+	map_insert(obj, key, (YMLValue){.type = YML_NULL, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_bool(YMLValue *obj, const char *key, bool val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_BOOL, .value.boolean = val});
+	map_insert(obj, key, (YMLValue){.type = YML_BOOL, .value.boolean = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_int(YMLValue *obj, const char *key, long long val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_INT, .value.integer = val});
+	map_insert(obj, key, (YMLValue){.type = YML_INT, .value.integer = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_float(YMLValue *obj, const char *key, double val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_FLOAT, .value.number = val});
+	map_insert(obj, key, (YMLValue){.type = YML_FLOAT, .value.number = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_str(YMLValue *obj, const char *key, const char *val)
 {
-	map_insert(obj, key, _yml_mk_str(val));
+	map_insert(obj, key, _yml_mk_str(val, obj->allocator));
 }
 
 void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
@@ -106,35 +108,36 @@ void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
 	map_insert(obj, key, _yml_mk_node(val));
 }
 
-static YMLValue *_yml_build_int_arr(const long long *arr, size_t len)
+static YMLValue *_yml_build_int_arr(const long long *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
-		YMLValue e = {.type = YML_INT, .value.integer = arr[i]};
+		YMLValue e = {.type = YML_INT, .value.integer = arr[i], .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
 }
 
-static YMLValue *_yml_build_float_arr(const double *arr, size_t len)
+static YMLValue *_yml_build_float_arr(const double *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
-		YMLValue e = {.type = YML_FLOAT, .value.number = arr[i]};
+		YMLValue e = {.type = YML_FLOAT, .value.number = arr[i], .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
 }
 
-static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len)
+static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
 		YMLValue e = {.type = YML_STRING,
-		              .value.string = arr[i] ? yml_strdup(arr[i]) : NULL};
+		              .value.string = arr[i] ? yml_strdup(arr[i], alloc) : NULL,
+		              .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
@@ -143,21 +146,21 @@ static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len)
 void _YMLMapAddArr_int(YMLValue *obj, const char *key,
                        const long long *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_int_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_int_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
 void _YMLMapAddArr_float(YMLValue *obj, const char *key,
                          const double *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_float_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_float_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
 void _YMLMapAddArr_str(YMLValue *obj, const char *key,
                        const char *const *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_str_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_str_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
@@ -165,31 +168,31 @@ void _YMLMapAddArr_str(YMLValue *obj, const char *key,
 
 void YMLArrPushNull(YMLValue *arr)
 {
-	YMLValue e = {.type = YML_NULL};
+	YMLValue e = {.type = YML_NULL, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_bool(YMLValue *arr, bool val)
 {
-	YMLValue e = {.type = YML_BOOL, .value.boolean = val};
+	YMLValue e = {.type = YML_BOOL, .value.boolean = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_int(YMLValue *arr, long long val)
 {
-	YMLValue e = {.type = YML_INT, .value.integer = val};
+	YMLValue e = {.type = YML_INT, .value.integer = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_float(YMLValue *arr, double val)
 {
-	YMLValue e = {.type = YML_FLOAT, .value.number = val};
+	YMLValue e = {.type = YML_FLOAT, .value.number = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_str(YMLValue *arr, const char *val)
 {
-	da_push(arr->value.array, _yml_mk_str(val));
+	da_push(arr->value.array, _yml_mk_str(val, arr->allocator));
 }
 
 void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
@@ -200,21 +203,24 @@ void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
 void _YMLArrPushArr_int(YMLValue *arr, const long long *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_int_arr(c_arr, len)};
+	                   .value.array = _yml_build_int_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 
 void _YMLArrPushArr_float(YMLValue *arr, const double *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_float_arr(c_arr, len)};
+	                   .value.array = _yml_build_float_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 
 void _YMLArrPushArr_str(YMLValue *arr, const char *const *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_str_arr(c_arr, len)};
+	                   .value.array = _yml_build_str_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 

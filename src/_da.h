@@ -41,18 +41,18 @@ YML_PRIVATE void _da_free(void *da);
 /*
  * Типизированные макросы.
  *
- * da_new(T, cap)      — выделить новый da<T> с ёмкостью cap
+ * da_new(T, cap, alloc) — выделить новый da<T> с ёмкостью cap
  * da_push(da, val)    — добавить val в конец, обновить da
  * da_len(da)          — длина (то же что YMLArrayLen)
  * da_free(da)         — освободить
  *
  * Пример:
- *   int *arr = da_new(int, 8);
+ *   int *arr = da_new(int, 8, NULL);
  *   da_push(arr, 42);
  *   for (size_t i = 0; i < da_len(arr); i++) printf("%d\n", arr[i]);
  *   da_free(arr);
  */
-#define da_new(T, cap) ((T *)_da_new(sizeof(T), (cap)))
+#define da_new(T, cap, alloc) ((T *)_da_new(sizeof(T), (cap), (alloc)))
 #define da_len(da) (((_da_hdr *)(da) - 1)->len)
 #define da_push(da, val)                              \
 	do                                                \

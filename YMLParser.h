@@ -66,6 +66,16 @@ typedef enum YMLValueType
 	YML_OBJECT,
 } YMLValueType;
 
+
+struct YMLAllocator {
+	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
+	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
+	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
+	void  (*dealloc)(void* ptr,                 void* ctx, const char* FILE, int LINE);
+	void* ctx;
+};
+
+
 /*
  * YMLValue — a single node in the parse tree.
  *
@@ -90,6 +100,7 @@ typedef struct YMLValue
 		void *object;			// _hm* — opaque pointer, access via YMLMapGet/YMLMapForech
 		struct YMLValue *array; // da<YMLValue> — direct indexing arr[i], length via YMLArrayLen
 	} value;
+	struct YMLAllocator* allocator; 
 } YMLValue;
 
 /*
@@ -104,7 +115,8 @@ typedef struct
 {
 	size_t len;
 	size_t cap;
-} __da_header; /* must match _da_hdr in _da.h */
+	struct YMLAllocator* alloc;
+} __da_header;
 
 /*
  * Returns the number of elements in a da array.
@@ -118,6 +130,7 @@ struct _YMLOptionals
 	char **error;	   // *error points to a buffer with the error message
 	YMLValueType type; // for YMLMapGet: expected type (YML_ANY — skip check)
 	char splitter;	   // for YMLMapGet: if non-zero, split key by this char and traverse nested objects
+	struct YMLAllocator* allocator;
 };
 
 /*
@@ -276,6 +289,7 @@ struct _YMLWriteOptions
 	char **error;
 	int    indent;
 	int    start;
+	struct YMLAllocator* allocator;
 };
 
 /* ── Create ──────────────────────────────────────────────────────── */
@@ -284,14 +298,13 @@ struct _YMLWriteOptions
  * Allocate an empty YML_OBJECT node.
  * Free with YMLDestroy.
  */
-YMLValue *_YMLCreate(void);
+YMLValue *_YMLCreate(struct YMLAllocator* alloc);
 
-/*
- * Allocate an empty YML_ARRAY node.
- * Free with YMLDestroy.
- */
-YMLValue *_YMLCreateArr(void);
+#define YMLCreate(...) _YMLCreate(__VA_ARGS__)
+	
+YMLValue *_YMLCreateArr(struct YMLAllocator* alloc);
 
+#define YMLCreateArr(...) _YMLCreateArr(__VA_ARGS__)
 
 /* ── YMLMapAdd ───────────────────────────────────────────────────── */
 
@@ -426,46 +439,25 @@ int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptio
 	_YMLWriteBuf(obj, buf, cap, \
 		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
 
-
-struct YMLAllocator {
-	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
-	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
-	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
-	void  (*dealloc)(void* ptr,                 void* ctx, const char* FILE, int LINE);
-	void* ctx;
-};
-
-/*
- * YMLParserSetAllocator — replaces the global allocator used by the parser.
- *
- * Must be called before any YMLParse / YMLCreate / YMLDestroy.
- * The allocator is a plain global, not thread-local: set it once at startup
- * before spawning threads.
- *
- * Each hook receives the call-site FILE/LINE for diagnostics; ignore if
- * not needed.
- *
- *   YMLParserSetAllocator((struct YMLAllocator){
- *       .alloc   = my_alloc,
- *       .realloc = my_realloc,
- *       .calloc  = my_calloc,
- *       .dealloc = my_free,
- *       .ctx     = &my_ctx,  // forwarded to every call; NULL is fine
- *   });
- */
-void YMLParserSetAllocator(struct YMLAllocator allocator);
-
 #ifdef YMLPARSER_IMPLEMENTATION
 /* YML_PRIVATE — hides internal symbols. */
 #define YML_PRIVATE static
 
 /* ── src/_allocator.h ──────────────────────────────────────────── */
-extern struct YMLAllocator YMLAllocator;
+#ifndef YML_PRIVATE
+#	define YML_PRIVATE
+#endif
 
-#define YMLALLOC(len)           (YMLAllocator.alloc((len), YMLAllocator.ctx, __FILE__, __LINE__))
-#define YMLREALLOC(ptr, new_len)(YMLAllocator.realloc((ptr), (new_len), YMLAllocator.ctx, __FILE__, __LINE__))
-#define YMLCALLOC(n, size)      (YMLAllocator.calloc((n), (size), YMLAllocator.ctx, __FILE__, __LINE__))
-#define YMLDEALLOC(ptr)         (YMLAllocator.dealloc((ptr), YMLAllocator.ctx, __FILE__, __LINE__))
+
+YML_PRIVATE void* _yml_alloc(size_t len, struct YMLAllocator* ctx, const char* FILE, int LINE);
+YML_PRIVATE void* _yml_realloc(void* ptr, size_t new_len, struct YMLAllocator* ctx, const char* FILE, int LINE);
+YML_PRIVATE void* _yml_calloc(size_t n, size_t size, struct YMLAllocator* ctx, const char* FILE, int LINE);
+YML_PRIVATE void  _yml_dealloc(void* ptr, struct YMLAllocator* ctx, const char* FILE, int LINE);
+
+#define YMLALLOC(len, alloc)            (_yml_alloc((len), (alloc), __FILE__, __LINE__))
+#define YMLREALLOC(ptr, new_len, alloc) (_yml_realloc((ptr), (new_len), (alloc), __FILE__, __LINE__))
+#define YMLCALLOC(n, size, alloc)       (_yml_calloc((n), (size), (alloc), __FILE__, __LINE__))
+#define YMLDEALLOC(ptr, alloc)          (_yml_dealloc((ptr), (alloc), __FILE__, __LINE__))
 
 /* ── src/_da.h ─────────────────────────────────────────────────── */
 /*
@@ -491,10 +483,11 @@ typedef struct
 {
 	size_t len;
 	size_t cap;
+	struct YMLAllocator* alloc;
 } _da_hdr;
 
 /* Выделить новый da для элементов размером elem_size. */
-YML_PRIVATE void *_da_new(size_t elem_size, size_t cap);
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap, struct YMLAllocator* alloc);
 
 /*
  * Добавить элемент (elem_size байт) в конец da.
@@ -509,18 +502,18 @@ YML_PRIVATE void _da_free(void *da);
 /*
  * Типизированные макросы.
  *
- * da_new(T, cap)      — выделить новый da<T> с ёмкостью cap
+ * da_new(T, cap, alloc) — выделить новый da<T> с ёмкостью cap
  * da_push(da, val)    — добавить val в конец, обновить da
  * da_len(da)          — длина (то же что YMLArrayLen)
  * da_free(da)         — освободить
  *
  * Пример:
- *   int *arr = da_new(int, 8);
+ *   int *arr = da_new(int, 8, NULL);
  *   da_push(arr, 42);
  *   for (size_t i = 0; i < da_len(arr); i++) printf("%d\n", arr[i]);
  *   da_free(arr);
  */
-#define da_new(T, cap) ((T *)_da_new(sizeof(T), (cap)))
+#define da_new(T, cap, alloc) ((T *)_da_new(sizeof(T), (cap), (alloc)))
 #define da_len(da) (((_da_hdr *)(da) - 1)->len)
 #define da_push(da, val)                              \
 	do                                                \
@@ -560,10 +553,11 @@ typedef struct
 	_hm_entry *entries; /* malloc-массив слотов (не da — управляется вручную) */
 	size_t cap;			/* количество слотов (степень двойки) */
 	size_t len;			/* количество занятых слотов */
+	struct YMLAllocator* alloc;
 } _hm;
 
 /* Выделить новую hm. cap — начальное количество слотов (округляется до степени 2). */
-YML_PRIVATE _hm *hm_new(size_t cap);
+YML_PRIVATE _hm *hm_new(size_t cap, struct YMLAllocator* alloc);
 
 /*
  * Вставить или обновить пару key → value.
@@ -703,10 +697,10 @@ YML_PRIVATE Token *lex(const char *src, const char **error);
 /*
  * yml_strdup — портативная замена strdup (не требует POSIX / _POSIX_C_SOURCE).
  */
-static inline char *yml_strdup(const char *s)
+static inline char *yml_strdup(const char *s, struct YMLAllocator* alloc)
 {
 	size_t n = strlen(s) + 1;
-	char *copy = (char *)YMLALLOC(n);
+	char *copy = (char *)YMLALLOC(n, alloc);
 	if (copy)
 		memcpy(copy, s, n);
 	return copy;
@@ -726,7 +720,7 @@ static inline void yml_value_free_impl(YMLValue *v)
 	switch (v->type)
 	{
 	case YML_STRING:
-		YMLDEALLOC((char *)v->value.string);
+		YMLDEALLOC((char *)v->value.string, v->allocator);
 		break;
 	case YML_ARRAY:
 	{
@@ -748,15 +742,16 @@ static inline void yml_value_free_impl(YMLValue *v)
 #include <stdlib.h>
 #include <string.h>
 
-YML_PRIVATE void *_da_new(size_t elem_size, size_t cap)
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap, struct YMLAllocator* alloc)
 {
 	if (cap == 0)
 		cap = 4;
-	_da_hdr *hdr = YMLALLOC(sizeof(_da_hdr) + elem_size * cap);
+	_da_hdr *hdr = YMLALLOC(sizeof(_da_hdr) + elem_size * cap, alloc);
 	if (!hdr)
 		return NULL;
 	hdr->len = 0;
 	hdr->cap = cap;
+	hdr->alloc = alloc;
 	return hdr + 1;
 }
 
@@ -766,10 +761,11 @@ YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size)
 	if (hdr->len == hdr->cap)
 	{
 		size_t new_cap = hdr->cap * 2;
-		_da_hdr *new_hdr = YMLREALLOC(hdr, sizeof(_da_hdr) + elem_size * new_cap);
+		_da_hdr *new_hdr = YMLREALLOC(hdr, sizeof(_da_hdr) + elem_size * new_cap, hdr->alloc);
 		if (!new_hdr)
-			return NULL; /* старый блок жив, cap не тронут */
+			return NULL;
 		new_hdr->cap = new_cap;
+		new_hdr->alloc = hdr->alloc;
 		hdr = new_hdr;
 	}
 	memcpy((char *)(hdr + 1) + elem_size * hdr->len, elem, elem_size);
@@ -781,7 +777,8 @@ YML_PRIVATE void _da_free(void *da)
 {
 	if (!da)
 		return;
-	YMLDEALLOC((_da_hdr *)da - 1);
+	_da_hdr *hdr = (_da_hdr *)da - 1;
+	YMLDEALLOC(hdr, hdr->alloc);
 }
 
 /* ── src/_hm.c ─────────────────────────────────────────────────── */
@@ -812,20 +809,21 @@ static size_t next_pow2(size_t n)
 	return n + 1;
 }
 
-YML_PRIVATE _hm *hm_new(size_t cap)
+YML_PRIVATE _hm *hm_new(size_t cap, struct YMLAllocator* alloc)
 {
-	_hm *hm = YMLALLOC(sizeof(_hm));
+	_hm *hm = YMLALLOC(sizeof(_hm), alloc);
 	if (!hm)
 		return NULL;
 	cap = next_pow2(cap < 4 ? 4 : cap);
-	hm->entries = YMLCALLOC(cap, sizeof(_hm_entry));
+	hm->entries = YMLCALLOC(cap, sizeof(_hm_entry), alloc);
 	if (!hm->entries)
 	{
-		YMLDEALLOC(hm);
+		YMLDEALLOC(hm, alloc);
 		return NULL;
 	}
 	hm->cap = cap;
 	hm->len = 0;
+	hm->alloc = alloc;
 	return hm;
 }
 
@@ -833,7 +831,7 @@ YML_PRIVATE _hm *hm_new(size_t cap)
 static bool hm_grow(_hm *hm)
 {
 	size_t new_cap = hm->cap * 2;
-	_hm_entry *new_entries = YMLCALLOC(new_cap, sizeof(_hm_entry));
+	_hm_entry *new_entries = YMLCALLOC(new_cap, sizeof(_hm_entry), hm->alloc);
 	if (!new_entries)
 		return false;
 	for (size_t i = 0; i < hm->cap; i++)
@@ -845,7 +843,7 @@ static bool hm_grow(_hm *hm)
 			idx = (idx + 1) & (new_cap - 1);
 		new_entries[idx] = hm->entries[i];
 	}
-	YMLDEALLOC(hm->entries);
+	YMLDEALLOC(hm->entries, hm->alloc);
 	hm->entries = new_entries;
 	hm->cap = new_cap;
 	return true;
@@ -867,7 +865,7 @@ YML_PRIVATE bool hm_set(_hm *hm, const char *key, YMLValue value)
 		}
 		idx = (idx + 1) & (hm->cap - 1);
 	}
-	hm->entries[idx].key = yml_strdup(key);
+	hm->entries[idx].key = yml_strdup(key, hm->alloc);
 	if (!hm->entries[idx].key)
 		return false;
 	hm->entries[idx].value = value;
@@ -910,11 +908,11 @@ YML_PRIVATE void hm_free(_hm *hm)
 	{
 		if (!hm->entries[i].key)
 			continue;
-		YMLDEALLOC(hm->entries[i].key);
+		YMLDEALLOC(hm->entries[i].key, hm->alloc);
 		yml_value_free_impl(&hm->entries[i].value);
 	}
-	YMLDEALLOC(hm->entries);
-	YMLDEALLOC(hm);
+	YMLDEALLOC(hm->entries, hm->alloc);
+	YMLDEALLOC(hm, hm->alloc);
 }
 
 /* ── src/_lexer.c ──────────────────────────────────────────────── */
@@ -963,7 +961,7 @@ static char *decode_utf16(const unsigned char *src, size_t src_bytes, bool be)
 {
 	/* Худший случай: каждый code unit → 3 байта UTF-8. */
 	size_t cap = src_bytes / 2 * 3 + 1;
-	char *buf = YMLALLOC(cap);
+	char *buf = YMLALLOC(cap, NULL);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -1005,7 +1003,7 @@ static char *decode_utf32(const unsigned char *src, size_t src_bytes, bool be)
 {
 	/* Худший случай: каждый codepoint → 4 байта UTF-8. */
 	size_t cap = src_bytes / 4 * 4 + 1;
-	char *buf = YMLALLOC(cap);
+	char *buf = YMLALLOC(cap, NULL);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -1325,7 +1323,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 
 	/* собрать строки тела */
 	size_t buf_cap = 256;
-	char *buf = YMLALLOC(buf_cap);
+	char *buf = YMLALLOC(buf_cap, NULL);
 	if (!buf)
 	{
 		l->error = "OOM";
@@ -1351,7 +1349,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 			if (buf_len + 1 >= buf_cap)
 			{
 				buf_cap *= 2;
-				buf = YMLREALLOC(buf, buf_cap);
+				buf = YMLREALLOC(buf, buf_cap, NULL);
 				if (!buf)
 				{
 					l->error = "OOM";
@@ -1380,7 +1378,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 		while (buf_len + (size_t)extra + 1 >= buf_cap)
 		{
 			buf_cap *= 2;
-			buf = YMLREALLOC(buf, buf_cap);
+			buf = YMLREALLOC(buf, buf_cap, NULL);
 			if (!buf)
 			{
 				l->error = "OOM";
@@ -1398,7 +1396,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 			if (buf_len + 1 >= buf_cap)
 			{
 				buf_cap *= 2;
-				buf = YMLREALLOC(buf, buf_cap);
+				buf = YMLREALLOC(buf, buf_cap, NULL);
 				if (!buf)
 				{
 					l->error = "OOM";
@@ -1413,7 +1411,7 @@ static Token lex_block_scalar(Lexer *l, ScalarStyle style)
 		if (buf_len + 1 >= buf_cap)
 		{
 			buf_cap *= 2;
-			buf = YMLREALLOC(buf, buf_cap);
+			buf = YMLREALLOC(buf, buf_cap, NULL);
 			if (!buf)
 			{
 				l->error = "OOM";
@@ -1535,10 +1533,10 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 		return NULL; /* OOM при транскодировании */
 
 	Lexer l = {.src = use_src, .p = use_src, .line = 1, .col = 0, .flow_depth = 0, .error = NULL};
-	Token *tokens = da_new(Token, 64);
+	Token *tokens = da_new(Token, 64, NULL);
 	if (!tokens)
 	{
-		YMLDEALLOC(converted);
+		YMLDEALLOC(converted, NULL);
 		if (error_out)
 			*error_out = "OOM";
 		return NULL;
@@ -1722,7 +1720,7 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 		}
 	}
 
-	YMLDEALLOC(converted); /* NULL-safe; освобождаем UTF-8 буфер если был выделен */
+	YMLDEALLOC(converted, NULL); /* NULL-safe; освобождаем UTF-8 буфер если был выделен */
 
 	if (l.error)
 	{
@@ -1741,10 +1739,12 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 {
 	if (!src)
 		return NULL;
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	struct YMLAllocator* alloc = src->allocator;
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
 	v->type = src->type;
+	v->allocator = alloc;
 	switch (src->type)
 	{
 	case YML_NULL:
@@ -1754,19 +1754,19 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		v->value = src->value;
 		break;
 	case YML_STRING:
-		v->value.string = src->value.string ? yml_strdup(src->value.string) : NULL;
+		v->value.string = src->value.string ? yml_strdup(src->value.string, alloc) : NULL;
 		break;
 	case YML_ARRAY:
 	{
 		size_t n = da_len(src->value.array);
-		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1);
+		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1, alloc);
 		for (size_t i = 0; i < n; i++)
 		{
 			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
 			if (cp)
 			{
 				da_push(arr, *cp);
-				YMLDEALLOC(cp);
+				YMLDEALLOC(cp, alloc);
 			}
 		}
 		v->value.array = arr;
@@ -1775,7 +1775,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 	case YML_OBJECT:
 	{
 		_hm *src_hm = (_hm *)src->value.object;
-		_hm *dst_hm = hm_new(src_hm->cap);
+		_hm *dst_hm = hm_new(src_hm->cap, alloc);
 		size_t idx = 0;
 		const char *key;
 		YMLValue *val;
@@ -1785,7 +1785,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 			if (cp)
 			{
 				hm_set(dst_hm, key, *cp);
-				YMLDEALLOC(cp);
+				YMLDEALLOC(cp, alloc);
 			}
 		}
 		v->value.object = dst_hm;
@@ -1841,10 +1841,12 @@ typedef struct
 
 typedef struct
 {
-	Token *tokens; /* da<Token> от лексера */
-	size_t pos;	   /* индекс текущего токена */
+	Token *tokens;
+	size_t pos;
 
-	_anchor_entry *anchors; /* da<_anchor_entry> */
+	_anchor_entry *anchors;
+
+	struct YMLAllocator* alloc;
 
 	int ok;
 	char error[256];
@@ -1857,7 +1859,7 @@ static void anchors_clear(Parser *p)
 {
 	for (size_t i = 0; i < da_len(p->anchors); i++)
 	{
-		YMLDEALLOC(p->anchors[i].name);
+		YMLDEALLOC(p->anchors[i].name, p->alloc);
 		_YMLDestroy(p->anchors[i].node, (struct _YMLOptionals){0});
 	}
 	((_da_hdr *)p->anchors - 1)->len = 0;
@@ -1882,9 +1884,9 @@ static void parse_error(Parser *p, const char *msg)
 }
 
 /* Скопировать value/value_len токена в heap (NUL-terminated). */
-static char *token_strdup(const Token *t)
+static char *token_strdup(const Token *t, struct YMLAllocator* alloc)
 {
-	char *s = YMLALLOC(t->value_len + 1);
+	char *s = YMLALLOC(t->value_len + 1, alloc);
 	if (!s)
 		return NULL;
 	memcpy(s, t->value, t->value_len);
@@ -1903,7 +1905,7 @@ static char *token_strdup(const Token *t)
  *             .inf  -.inf  +.inf  .nan
  *   5. string: всё остальное
  */
-static YMLValue infer_scalar(const char *s, size_t len);
+static YMLValue infer_scalar(const char *s, size_t len, struct YMLAllocator* alloc);
 
 /* ── рекурсивные функции разбора ───────────────────────────────────── */
 
@@ -1967,11 +1969,10 @@ static bool is_octal(const char *s, size_t len)
 	return len > 2;
 }
 
-static YMLValue infer_scalar(const char *s, size_t len)
+static YMLValue infer_scalar(const char *s, size_t len, struct YMLAllocator* alloc)
 {
 	YMLValue v = {0};
 
-	/* null */
 	if (len == 0 || (len == 1 && s[0] == '~') ||
 		(len == 4 && (memcmp(s, "null", 4) == 0 || memcmp(s, "Null", 4) == 0 || memcmp(s, "NULL", 4) == 0)))
 	{
@@ -1979,7 +1980,6 @@ static YMLValue infer_scalar(const char *s, size_t len)
 		return v;
 	}
 
-	/* bool */
 	if ((len == 4 && (memcmp(s, "true", 4) == 0 || memcmp(s, "True", 4) == 0 || memcmp(s, "TRUE", 4) == 0)))
 	{
 		v.type = YML_BOOL;
@@ -1993,7 +1993,6 @@ static YMLValue infer_scalar(const char *s, size_t len)
 		return v;
 	}
 
-	/* special floats: .inf / +.inf / -.inf / .nan */
 	if ((len == 4 && memcmp(s, ".inf", 4) == 0) || (len == 5 && memcmp(s, "+.inf", 5) == 0))
 	{
 		v.type = YML_FLOAT;
@@ -2014,7 +2013,6 @@ static YMLValue infer_scalar(const char *s, size_t len)
 		return v;
 	}
 
-	/* int: decimal / 0x / 0o */
 	if (is_decimal(s, len))
 	{
 		char tmp[64];
@@ -2046,9 +2044,7 @@ static YMLValue infer_scalar(const char *s, size_t len)
 		return v;
 	}
 
-	/* float */
 	{
-		/* быстрая проверка: должны быть цифры, '.', 'e', 'E', '+', '-' */
 		bool has_dot_or_e = false;
 		const char *p2 = s;
 		size_t rem = len;
@@ -2082,8 +2078,7 @@ static YMLValue infer_scalar(const char *s, size_t len)
 		}
 	}
 
-	/* string */
-	char *copy = YMLALLOC(len + 1);
+	char *copy = YMLALLOC(len + 1, alloc);
 	if (copy)
 	{
 		memcpy(copy, s, len);
@@ -2146,9 +2141,9 @@ static uint32_t parse_hex_n(const char *s, int n)
  * src/len — содержимое между кавычками (без самих кавычек).
  * Возвращает heap-строку (caller освобождает).
  */
-static char *unescape_double_quoted(const char *src, size_t len)
+static char *unescape_double_quoted(const char *src, size_t len, struct YMLAllocator* alloc)
 {
-	char *buf = YMLALLOC(len + 1);
+	char *buf = YMLALLOC(len + 1, alloc);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -2239,9 +2234,9 @@ static char *unescape_double_quoted(const char *src, size_t len)
 /*
  * Обработать single-quoted строку: '' → '.
  */
-static char *unescape_single_quoted(const char *src, size_t len)
+static char *unescape_single_quoted(const char *src, size_t len, struct YMLAllocator* alloc)
 {
-	char *buf = YMLALLOC(len + 1);
+	char *buf = YMLALLOC(len + 1, alloc);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -2263,9 +2258,9 @@ static char *unescape_single_quoted(const char *src, size_t len)
  * Свернуть содержимое folded-блочного скаляра.
  * Правило: одиночный \n → ' ', но \n\n → \n.
  */
-static char *fold_scalar(const char *src, size_t len)
+static char *fold_scalar(const char *src, size_t len, struct YMLAllocator* alloc)
 {
-	char *buf = YMLALLOC(len + 1);
+	char *buf = YMLALLOC(len + 1, alloc);
 	if (!buf)
 		return NULL;
 	size_t w = 0;
@@ -2308,12 +2303,11 @@ static char *fold_scalar(const char *src, size_t len)
 
 static void anchor_add(Parser *p, const char *name, size_t name_len, YMLValue *node)
 {
-	char *n = YMLALLOC(name_len + 1);
+	char *n = YMLALLOC(name_len + 1, p->alloc);
 	if (!n)
 		return;
 	memcpy(n, name, name_len);
 	n[name_len] = '\0';
-	/* хранить deep copy: оригинальный node может быть скопирован в hm и освобождён */
 	_anchor_entry e = {.name = n, .node = yml_deep_copy(node)};
 	da_push(p->anchors, e);
 }
@@ -2349,7 +2343,6 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 {
 	if (tag_len < 2)
 		return;
-	/* нормализовать: !!str → "str", !str → "str" */
 	const char *t = tag;
 	size_t tl = tag_len;
 	if (tl >= 2 && t[0] == '!' && t[1] == '!')
@@ -2373,7 +2366,6 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 		v->type = YML_FLOAT;
 		return;
 	}
-	/* !!seq, !!map — структуры, не конвертируем */
 
 	if (tl == 3 && memcmp(t, "str", 3) == 0)
 	{
@@ -2398,7 +2390,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 			break;
 		}
 		v->type = YML_STRING;
-		v->value.string = yml_strdup(buf);
+		v->value.string = yml_strdup(buf, v->allocator);
 		return;
 	}
 
@@ -2410,7 +2402,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 		{
 			char *end;
 			int64_t n = strtoll(v->value.string, &end, 0);
-			YMLDEALLOC((char *)v->value.string);
+			YMLDEALLOC((char *)v->value.string, v->allocator);
 			v->type = YML_INT;
 			v->value.integer = n;
 		}
@@ -2432,7 +2424,7 @@ static void apply_tag(YMLValue *v, const char *tag, size_t tag_len)
 		else if (v->type == YML_INT)
 			b = v->value.integer != 0;
 		if (v->type == YML_STRING)
-			YMLDEALLOC((char *)v->value.string);
+			YMLDEALLOC((char *)v->value.string, v->allocator);
 		v->type = YML_BOOL;
 		v->value.boolean = b;
 		return;
@@ -2451,29 +2443,31 @@ static YMLValue *parse_scalar(Parser *p)
 	}
 	advance(p);
 
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), p->alloc);
 	if (!v)
 	{
 		parse_error(p, "OOM");
 		return NULL;
 	}
+	v->allocator = p->alloc;
 
 	switch (t->style)
 	{
 	case SCALAR_PLAIN:
-		*v = infer_scalar(t->value, t->value_len);
+		*v = infer_scalar(t->value, t->value_len, p->alloc);
+		v->allocator = p->alloc;
 		break;
 	case SCALAR_SINGLE_QUOTED:
 		v->type = YML_STRING;
-		v->value.string = unescape_single_quoted(t->value, t->value_len);
+		v->value.string = unescape_single_quoted(t->value, t->value_len, p->alloc);
 		break;
 	case SCALAR_DOUBLE_QUOTED:
 		v->type = YML_STRING;
-		v->value.string = unescape_double_quoted(t->value, t->value_len);
+		v->value.string = unescape_double_quoted(t->value, t->value_len, p->alloc);
 		break;
 	case SCALAR_LITERAL:
 		v->type = YML_STRING;
-		v->value.string = YMLALLOC(t->value_len + 1);
+		v->value.string = YMLALLOC(t->value_len + 1, p->alloc);
 		if (v->value.string)
 		{
 			memcpy((char *)v->value.string, t->value, t->value_len);
@@ -2481,16 +2475,16 @@ static YMLValue *parse_scalar(Parser *p)
 		}
 		if (t->owns_value)
 		{
-			YMLDEALLOC((char *)t->value);
+			YMLDEALLOC((char *)t->value, p->alloc);
 			t->value = NULL;
 		}
 		break;
 	case SCALAR_FOLDED:
 		v->type = YML_STRING;
-		v->value.string = fold_scalar(t->value, t->value_len);
+		v->value.string = fold_scalar(t->value, t->value_len, p->alloc);
 		if (t->owns_value)
 		{
-			YMLDEALLOC((char *)t->value);
+			YMLDEALLOC((char *)t->value, p->alloc);
 			t->value = NULL;
 		}
 		break;
@@ -2502,15 +2496,16 @@ static YMLValue *parse_scalar(Parser *p)
 
 static YMLValue *parse_flow_sequence(Parser *p)
 {
-	advance(p); /* skip [ */
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	advance(p);
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), p->alloc);
 	if (!v)
 	{
 		parse_error(p, "OOM");
 		return NULL;
 	}
 	v->type = YML_ARRAY;
-	v->value.array = da_new(YMLValue, 4);
+	v->value.array = da_new(YMLValue, 4, p->alloc);
+	v->allocator = p->alloc;
 
 	while (cur(p)->type != TK_FLOW_SEQ_END && cur(p)->type != TK_EOF)
 	{
@@ -2523,7 +2518,7 @@ static YMLValue *parse_flow_sequence(Parser *p)
 		if (p->ok || !elem)
 			break;
 		da_push(v->value.array, *elem);
-		YMLDEALLOC(elem);
+		YMLDEALLOC(elem, p->alloc);
 	}
 	if (cur(p)->type != TK_FLOW_SEQ_END)
 		parse_error(p, "unclosed '['");
@@ -2536,9 +2531,9 @@ static YMLValue *parse_flow_sequence(Parser *p)
 
 static YMLValue *parse_flow_mapping(Parser *p)
 {
-	advance(p); /* skip { */
-	_hm *hm = hm_new(8);
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	advance(p);
+	_hm *hm = hm_new(8, p->alloc);
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), p->alloc);
 	if (!v || !hm)
 	{
 		parse_error(p, "OOM");
@@ -2546,6 +2541,7 @@ static YMLValue *parse_flow_mapping(Parser *p)
 	}
 	v->type = YML_OBJECT;
 	v->value.object = hm;
+	v->allocator = p->alloc;
 
 	while (cur(p)->type != TK_FLOW_MAP_END && cur(p)->type != TK_EOF)
 	{
@@ -2557,20 +2553,19 @@ static YMLValue *parse_flow_mapping(Parser *p)
 		if (cur(p)->type == TK_MAP_KEY)
 		{
 			advance(p);
-		} /* explicit ? */
+		}
 
-		/* ключ должен быть скаляром */
 		if (cur(p)->type != TK_SCALAR)
 		{
 			parse_error(p, "expected scalar key in flow mapping");
 			break;
 		}
-		char *key = token_strdup(cur(p));
+		char *key = token_strdup(cur(p), p->alloc);
 		advance(p);
 
 		if (cur(p)->type != TK_MAP_VAL)
 		{
-			YMLDEALLOC(key);
+			YMLDEALLOC(key, p->alloc);
 			parse_error(p, "expected ':' in flow mapping");
 			break;
 		}
@@ -2579,12 +2574,12 @@ static YMLValue *parse_flow_mapping(Parser *p)
 		YMLValue *val = parse_node(p, 0);
 		if (p->ok || !val)
 		{
-			YMLDEALLOC(key);
+			YMLDEALLOC(key, p->alloc);
 			break;
 		}
 		hm_set(hm, key, *val);
-		YMLDEALLOC(key);
-		YMLDEALLOC(val);
+		YMLDEALLOC(key, p->alloc);
+		YMLDEALLOC(val, p->alloc);
 	}
 	if (cur(p)->type != TK_FLOW_MAP_END)
 		parse_error(p, "unclosed '{'");
@@ -2597,23 +2592,23 @@ static YMLValue *parse_flow_mapping(Parser *p)
 
 static YMLValue *parse_block_sequence(Parser *p, int indent)
 {
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), p->alloc);
 	if (!v)
 	{
 		parse_error(p, "OOM");
 		return NULL;
 	}
 	v->type = YML_ARRAY;
-	v->value.array = da_new(YMLValue, 4);
+	v->value.array = da_new(YMLValue, 4, p->alloc);
+	v->allocator = p->alloc;
 
 	while (cur(p)->type == TK_SEQ_ENTRY && cur(p)->col == indent)
 	{
-		advance(p); /* skip - */
-		/* если сразу EOF или следующий - с тем же отступом — null элемент */
+		advance(p);
 		if (cur(p)->type == TK_EOF || cur(p)->type == TK_DOC_END ||
 			(cur(p)->type == TK_SEQ_ENTRY && cur(p)->col == indent))
 		{
-			YMLValue null_v = {.type = YML_NULL};
+			YMLValue null_v = {.type = YML_NULL, .allocator = p->alloc};
 			da_push(v->value.array, null_v);
 			continue;
 		}
@@ -2621,7 +2616,7 @@ static YMLValue *parse_block_sequence(Parser *p, int indent)
 		if (p->ok || !elem)
 			break;
 		da_push(v->value.array, *elem);
-		YMLDEALLOC(elem);
+		YMLDEALLOC(elem, p->alloc);
 	}
 	return v;
 }
@@ -2645,19 +2640,18 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 		while (hm_next(src_hm, &idx, &key, &val))
 		{
 			if (!hm_get(dst, key))
-			{ /* не перезаписывать */
+			{
 				YMLValue *cp = yml_deep_copy(val);
 				if (cp)
 				{
 					hm_set(dst, key, *cp);
-					YMLDEALLOC(cp);
+					YMLDEALLOC(cp, src->allocator);
 				}
 			}
 		}
 	}
 	else if (src->type == YML_ARRAY)
 	{
-		/* << может быть массивом маппингов */
 		size_t n = da_len(src->value.array);
 		for (size_t i = 0; i < n; i++)
 			apply_merge(dst, &src->value.array[i]);
@@ -2666,8 +2660,8 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 
 static YMLValue *parse_block_mapping(Parser *p, int indent)
 {
-	_hm *hm = hm_new(8);
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	_hm *hm = hm_new(8, p->alloc);
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), p->alloc);
 	if (!v || !hm)
 	{
 		parse_error(p, "OOM");
@@ -2675,10 +2669,10 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 	}
 	v->type = YML_OBJECT;
 	v->value.object = hm;
+	v->allocator = p->alloc;
 
 	for (;;)
 	{
-		/* явный ключ (? key : value) */
 		bool explicit_key = (cur(p)->type == TK_MAP_KEY && cur(p)->col == indent);
 		bool implicit_key = (cur(p)->type == TK_SCALAR && cur(p)->col == indent &&
 							 peek(p, 1)->type == TK_MAP_VAL &&
@@ -2687,15 +2681,14 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 			break;
 
 		if (explicit_key)
-			advance(p); /* skip ? */
+			advance(p);
 
-		/* ключ */
 		if (cur(p)->type != TK_SCALAR)
 		{
 			parse_error(p, "expected scalar key");
 			break;
 		}
-		char *key = token_strdup(cur(p));
+		char *key = token_strdup(cur(p), p->alloc);
 		if (!key)
 		{
 			parse_error(p, "OOM");
@@ -2703,30 +2696,29 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		}
 		advance(p);
 
-		/* : */
 		if (cur(p)->type != TK_MAP_VAL)
 		{
-			/* нет значения — null */
-			YMLValue null_v = {.type = YML_NULL};
+			YMLValue null_v = {.type = YML_NULL, .allocator = p->alloc};
 			if (strcmp(key, "<<") == 0)
 			{
-				YMLDEALLOC(key);
+				YMLDEALLOC(key, p->alloc);
 				continue;
 			}
 			hm_set(hm, key, null_v);
-			YMLDEALLOC(key);
+			YMLDEALLOC(key, p->alloc);
 			continue;
 		}
-		advance(p); /* skip : */
+		advance(p);
 
-		/* значение — может быть на той же строке или на следующей с большим отступом */
 		YMLValue *val;
 		if (cur(p)->type == TK_EOF || cur(p)->type == TK_DOC_END ||
 			cur(p)->type == TK_DOC_START)
 		{
-			val = YMLALLOC(sizeof(YMLValue));
-			if (val)
+			val = YMLALLOC(sizeof(YMLValue), p->alloc);
+			if (val) {
 				val->type = YML_NULL;
+				val->allocator = p->alloc;
+			}
 		}
 		else
 		{
@@ -2734,7 +2726,7 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		}
 		if (p->ok || !val)
 		{
-			YMLDEALLOC(key);
+			YMLDEALLOC(key, p->alloc);
 			break;
 		}
 
@@ -2746,9 +2738,9 @@ static YMLValue *parse_block_mapping(Parser *p, int indent)
 		else
 		{
 			hm_set(hm, key, *val);
-			YMLDEALLOC(val);
+			YMLDEALLOC(val, p->alloc);
 		}
-		YMLDEALLOC(key);
+		YMLDEALLOC(key, p->alloc);
 	}
 	return v;
 }
@@ -2760,7 +2752,6 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 	if (p->ok)
 		return NULL;
 
-	/* необязательный тег */
 	const char *tag = NULL;
 	size_t tag_len = 0;
 	if (cur(p)->type == TK_TAG)
@@ -2770,7 +2761,6 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 		advance(p);
 	}
 
-	/* необязательный якорь */
 	const char *anchor_name = NULL;
 	size_t anchor_len = 0;
 	if (cur(p)->type == TK_ANCHOR)
@@ -2812,7 +2802,6 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 	}
 	else if (t->type == TK_SCALAR && t->col >= min_indent)
 	{
-		/* смотрим вперёд: если следующий TK_MAP_VAL на той же строке — маппинг */
 		Token *nxt = peek(p, 1);
 		if (nxt->type == TK_MAP_VAL && nxt->line == t->line)
 		{
@@ -2825,16 +2814,19 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 	}
 	else if (t->type == TK_EOF || t->type == TK_DOC_END || t->type == TK_DOC_START)
 	{
-		v = YMLALLOC(sizeof(YMLValue));
-		if (v)
+		v = YMLALLOC(sizeof(YMLValue), p->alloc);
+		if (v) {
 			v->type = YML_NULL;
+			v->allocator = p->alloc;
+		}
 	}
 	else
 	{
-		/* неожиданный токен — пустое значение */
-		v = YMLALLOC(sizeof(YMLValue));
-		if (v)
+		v = YMLALLOC(sizeof(YMLValue), p->alloc);
+		if (v) {
 			v->type = YML_NULL;
+			v->allocator = p->alloc;
+		}
 	}
 
 	if (!v)
@@ -2871,9 +2863,9 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 		return NULL;
 	}
 
-	Parser p = {.tokens = tokens, .pos = 0, .anchors = da_new(_anchor_entry, 8), .ok = 0};
+	Parser p = {.tokens = tokens, .pos = 0, .anchors = da_new(_anchor_entry, 8, NULL), .alloc = optionals.allocator, .ok = 0};
 
-	YMLValue **docs = da_new(YMLValue *, 4);
+	YMLValue **docs = da_new(YMLValue *, 4, NULL);
 
 	while (cur(&p)->type != TK_EOF)
 	{
@@ -2901,7 +2893,7 @@ YMLValue **_YMLParseStream(const char *yml_str, struct _YMLOptionals optionals)
 	}
 
 	for (size_t i = 0; i < da_len(p.anchors); i++)
-		YMLDEALLOC(p.anchors[i].name);
+		YMLDEALLOC(p.anchors[i].name, p.alloc);
 	da_free(p.anchors);
 	da_free(tokens);
 
@@ -2934,7 +2926,8 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals)
 	Parser p = {
 		.tokens = tokens,
 		.pos = 0,
-		.anchors = da_new(_anchor_entry, 8),
+		.anchors = da_new(_anchor_entry, 8, NULL),
+		.alloc = optionals.allocator,
 		.ok = 0,
 	};
 
@@ -2956,7 +2949,7 @@ YMLValue *_YMLParse(const char *yml_str, struct _YMLOptionals optionals)
 	/* освободить имена и deep-copy ноды якорей */
 	for (size_t i = 0; i < da_len(p.anchors); i++)
 	{
-		YMLDEALLOC(p.anchors[i].name);
+		YMLDEALLOC(p.anchors[i].name, p.alloc);
 		_YMLDestroy(p.anchors[i].node, (struct _YMLOptionals){0});
 	}
 	da_free(p.anchors);
@@ -2974,7 +2967,7 @@ void _YMLDestroy(YMLValue *root, struct _YMLOptionals optionals)
 	if (!root)
 		return;
 	yml_value_free_impl(root);
-	YMLDEALLOC(root);
+	YMLDEALLOC(root, root->allocator);
 	if (optionals.ok)
 		*optionals.ok = 0;
 }
@@ -2992,7 +2985,7 @@ void _YMLDestroyStream(YMLValue **stream, struct _YMLOptionals optionals)
 }
 
 // NULL - нода чтобы небыло segfold если ключ не найден
-static YMLValue YMLNULLVallue = {.type=YML_NULL, .value=NULL}; 
+static YMLValue YMLNULLVallue = {.type=YML_NULL, .value={0}}; 
 
 /* индекс = YMLValueType + 1 (YML_ANY=-1 → 0, YML_NULL=0 → 1, …) */
 static const char *const _yml_type_names[] = {
@@ -3020,7 +3013,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 	if (optionals.splitter != 0)
 	{
 		size_t len = strlen(key);
-		char *buf = YMLALLOC(len + 1);
+		char *buf = YMLALLOC(len + 1, optionals.allocator);
 		if (!buf)
 		{
 			set_error(2, "YMLMapGet: OOM");
@@ -3047,7 +3040,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			{
 				snprintf(g_error, sizeof(g_error), "YMLMapGet: key '%s' not found", seg);
 				g_ok = 1;
-				YMLDEALLOC(buf);
+				YMLDEALLOC(buf, optionals.allocator);
 				if (optionals.ok)
 					*optionals.ok = g_ok;
 				if (optionals.error)
@@ -3056,7 +3049,7 @@ YMLValue *_YMLMapGet(void *hm, const char *key, struct _YMLOptionals optionals)
 			}
 			if (is_last)
 			{
-				YMLDEALLOC(buf);
+				YMLDEALLOC(buf, optionals.allocator);
 				if (optionals.type != YML_ANY && v->type != optionals.type)
 				{
 					snprintf(g_error, sizeof(g_error),
@@ -3137,10 +3130,10 @@ bool _YMLMapIterNext(_YMLMapIter *iter, const char **key, YMLValue **value)
 
 /* ── internal value constructors ───────────────────────────────────── */
 
-static YMLValue _yml_mk_str(const char *v)
+static YMLValue _yml_mk_str(const char *v, struct YMLAllocator* alloc)
 {
-	YMLValue r = {.type = YML_STRING};
-	r.value.string = v ? yml_strdup(v) : NULL;
+	YMLValue r = {.type = YML_STRING, .allocator = alloc};
+	r.value.string = v ? yml_strdup(v, alloc) : NULL;
 	return r;
 }
 
@@ -3152,41 +3145,43 @@ static YMLValue _yml_mk_node(YMLValue *v)
 	if (!cp)
 		return (YMLValue){.type = YML_NULL};
 	YMLValue r = *cp;
-	YMLDEALLOC(cp);
+	YMLDEALLOC(cp, cp->allocator);
 	return r;
 }
 
 /* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
 
-YMLValue *_YMLCreate(void)
+YMLValue *_YMLCreate(struct YMLAllocator* alloc)
 {
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
-	_hm *hm = hm_new(8);
+	_hm *hm = hm_new(8, alloc);
 	if (!hm)
 	{
-		YMLDEALLOC(v);
+		YMLDEALLOC(v, alloc);
 		return NULL;
 	}
 	v->type = YML_OBJECT;
 	v->value.object = hm;
+	v->allocator = alloc;
 	return v;
 }
 
-YMLValue *YMLCreateArr(void)
+YMLValue *_YMLCreateArr(struct YMLAllocator* alloc)
 {
-	YMLValue *v = YMLALLOC(sizeof(YMLValue));
+	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
-	YMLValue *arr = da_new(YMLValue, 4);
+	YMLValue *arr = da_new(YMLValue, 4, alloc);
 	if (!arr)
 	{
-		YMLDEALLOC(v);
+		YMLDEALLOC(v, alloc);
 		return NULL;
 	}
 	v->type = YML_ARRAY;
 	v->value.array = arr;
+	v->allocator = alloc;
 	return v;
 }
 
@@ -3205,27 +3200,27 @@ static void map_insert(YMLValue *obj, const char *key, YMLValue val)
 
 void YMLMapAddNull(YMLValue *obj, const char *key)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_NULL});
+	map_insert(obj, key, (YMLValue){.type = YML_NULL, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_bool(YMLValue *obj, const char *key, bool val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_BOOL, .value.boolean = val});
+	map_insert(obj, key, (YMLValue){.type = YML_BOOL, .value.boolean = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_int(YMLValue *obj, const char *key, long long val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_INT, .value.integer = val});
+	map_insert(obj, key, (YMLValue){.type = YML_INT, .value.integer = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_float(YMLValue *obj, const char *key, double val)
 {
-	map_insert(obj, key, (YMLValue){.type = YML_FLOAT, .value.number = val});
+	map_insert(obj, key, (YMLValue){.type = YML_FLOAT, .value.number = val, .allocator = obj->allocator});
 }
 
 void _YMLMapAdd_str(YMLValue *obj, const char *key, const char *val)
 {
-	map_insert(obj, key, _yml_mk_str(val));
+	map_insert(obj, key, _yml_mk_str(val, obj->allocator));
 }
 
 void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
@@ -3233,35 +3228,36 @@ void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
 	map_insert(obj, key, _yml_mk_node(val));
 }
 
-static YMLValue *_yml_build_int_arr(const long long *arr, size_t len)
+static YMLValue *_yml_build_int_arr(const long long *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
-		YMLValue e = {.type = YML_INT, .value.integer = arr[i]};
+		YMLValue e = {.type = YML_INT, .value.integer = arr[i], .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
 }
 
-static YMLValue *_yml_build_float_arr(const double *arr, size_t len)
+static YMLValue *_yml_build_float_arr(const double *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
-		YMLValue e = {.type = YML_FLOAT, .value.number = arr[i]};
+		YMLValue e = {.type = YML_FLOAT, .value.number = arr[i], .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
 }
 
-static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len)
+static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len, struct YMLAllocator* alloc)
 {
-	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1);
+	YMLValue *da = da_new(YMLValue, len > 0 ? len : 1, alloc);
 	for (size_t i = 0; i < len; i++)
 	{
 		YMLValue e = {.type = YML_STRING,
-		              .value.string = arr[i] ? yml_strdup(arr[i]) : NULL};
+		              .value.string = arr[i] ? yml_strdup(arr[i], alloc) : NULL,
+		              .allocator = alloc};
 		da_push(da, e);
 	}
 	return da;
@@ -3270,21 +3266,21 @@ static YMLValue *_yml_build_str_arr(const char *const *arr, size_t len)
 void _YMLMapAddArr_int(YMLValue *obj, const char *key,
                        const long long *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_int_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_int_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
 void _YMLMapAddArr_float(YMLValue *obj, const char *key,
                          const double *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_float_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_float_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
 void _YMLMapAddArr_str(YMLValue *obj, const char *key,
                        const char *const *arr, size_t len)
 {
-	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_str_arr(arr, len)};
+	YMLValue v = {.type = YML_ARRAY, .value.array = _yml_build_str_arr(arr, len, obj->allocator), .allocator = obj->allocator};
 	map_insert(obj, key, v);
 }
 
@@ -3292,31 +3288,31 @@ void _YMLMapAddArr_str(YMLValue *obj, const char *key,
 
 void YMLArrPushNull(YMLValue *arr)
 {
-	YMLValue e = {.type = YML_NULL};
+	YMLValue e = {.type = YML_NULL, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_bool(YMLValue *arr, bool val)
 {
-	YMLValue e = {.type = YML_BOOL, .value.boolean = val};
+	YMLValue e = {.type = YML_BOOL, .value.boolean = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_int(YMLValue *arr, long long val)
 {
-	YMLValue e = {.type = YML_INT, .value.integer = val};
+	YMLValue e = {.type = YML_INT, .value.integer = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_float(YMLValue *arr, double val)
 {
-	YMLValue e = {.type = YML_FLOAT, .value.number = val};
+	YMLValue e = {.type = YML_FLOAT, .value.number = val, .allocator = arr->allocator};
 	da_push(arr->value.array, e);
 }
 
 void _YMLArrPush_str(YMLValue *arr, const char *val)
 {
-	da_push(arr->value.array, _yml_mk_str(val));
+	da_push(arr->value.array, _yml_mk_str(val, arr->allocator));
 }
 
 void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
@@ -3327,21 +3323,24 @@ void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
 void _YMLArrPushArr_int(YMLValue *arr, const long long *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_int_arr(c_arr, len)};
+	                   .value.array = _yml_build_int_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 
 void _YMLArrPushArr_float(YMLValue *arr, const double *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_float_arr(c_arr, len)};
+	                   .value.array = _yml_build_float_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 
 void _YMLArrPushArr_str(YMLValue *arr, const char *const *c_arr, size_t len)
 {
 	YMLValue nested = {.type = YML_ARRAY,
-	                   .value.array = _yml_build_str_arr(c_arr, len)};
+	                   .value.array = _yml_build_str_arr(c_arr, len, arr->allocator),
+	                   .allocator = arr->allocator};
 	da_push(arr->value.array, nested);
 }
 
@@ -3682,42 +3681,47 @@ int _YMLWriteBuf(YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptions o
 
 
 
-static void* malloc_alloc(size_t len, void* ctx, const char* FILE, int LINE) {
-	(void)ctx;
+static void* malloc_alloc(size_t len, const char* FILE, int LINE) {
 	void* data = malloc(len);
 	if(data==NULL) fprintf(stderr, "[ERROR] alloc failed file: %s:%d\n", FILE, LINE);
 	return data;
 }
 
-static void* malloc_realloc(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE) {
-	(void)ctx;
+static void* malloc_realloc(void* ptr, size_t new_len, const char* FILE, int LINE) {
 	void* data = realloc(ptr, new_len);
 	if(data==NULL) fprintf(stderr, "[ERROR] realloc failed file: %s:%d\n", FILE, LINE);
 	return data;
 }
 
-static void* malloc_calloc(size_t n, size_t size, void* ctx, const char* FILE, int LINE) {
-	(void)ctx;
+static void* malloc_calloc(size_t n, size_t size, const char* FILE, int LINE) {
 	void* data = calloc(n, size);
 	if(data==NULL) fprintf(stderr, "[ERROR] calloc failed file: %s:%d\n", FILE, LINE);
 	return data;
 }
 
-static void malloc_dealloc(void* ptr, void* ctx, const char* FILE, int LINE) {
-	(void)ctx; (void)FILE; (void)LINE;
+static void malloc_dealloc(void* ptr, const char* FILE, int LINE) {
 	free(ptr);
 }
 
-struct YMLAllocator YMLAllocator = {
-	.alloc   = malloc_alloc,
-	.realloc = malloc_realloc,
-	.calloc  = malloc_calloc,
-	.dealloc = malloc_dealloc,
-	.ctx     = NULL
-};
 
-void YMLParserSetAllocator(struct YMLAllocator allocator) {
-	YMLAllocator = allocator;
+YML_PRIVATE void* _yml_alloc(size_t len, struct YMLAllocator* ctx, const char* FILE, int LINE){
+	if (ctx && ctx->alloc) return ctx->alloc(len, ctx->ctx, FILE, LINE);
+	return malloc_alloc(len, FILE, LINE);
+}
+
+YML_PRIVATE void* _yml_realloc(void* ptr, size_t new_len, struct YMLAllocator* ctx, const char* FILE, int LINE){
+	if (ctx && ctx->realloc) return ctx->realloc(ptr, new_len, ctx->ctx, FILE, LINE);
+	return malloc_realloc(ptr, new_len, FILE, LINE);
+}
+
+YML_PRIVATE void* _yml_calloc(size_t n, size_t size, struct YMLAllocator* ctx, const char* FILE, int LINE){
+	if (ctx && ctx->calloc) return ctx->calloc(n, size, ctx->ctx, FILE, LINE);
+	return malloc_calloc(n, size, FILE, LINE);
+}
+
+YML_PRIVATE void  _yml_dealloc(void* ptr, struct YMLAllocator* ctx, const char* FILE, int LINE){
+	if (ctx && ctx->dealloc) return ctx->dealloc(ptr, ctx->ctx, FILE, LINE);
+	return malloc_dealloc(ptr, FILE, LINE);
 }
 
 #endif /* YMLPARSER_IMPLEMENTATION */

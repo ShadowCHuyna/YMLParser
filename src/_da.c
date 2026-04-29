@@ -7,11 +7,12 @@ YML_PRIVATE void *_da_new(size_t elem_size, size_t cap, struct YMLAllocator* all
 {
 	if (cap == 0)
 		cap = 4;
-	_da_hdr *hdr = YMLALLOC(sizeof(_da_hdr) + elem_size * cap);
+	_da_hdr *hdr = YMLALLOC(sizeof(_da_hdr) + elem_size * cap, alloc);
 	if (!hdr)
 		return NULL;
 	hdr->len = 0;
 	hdr->cap = cap;
+	hdr->alloc = alloc;
 	return hdr + 1;
 }
 
@@ -21,10 +22,11 @@ YML_PRIVATE void *_da_push(void *da, const void *elem, size_t elem_size)
 	if (hdr->len == hdr->cap)
 	{
 		size_t new_cap = hdr->cap * 2;
-		_da_hdr *new_hdr = YMLREALLOC(hdr, sizeof(_da_hdr) + elem_size * new_cap);
+		_da_hdr *new_hdr = YMLREALLOC(hdr, sizeof(_da_hdr) + elem_size * new_cap, hdr->alloc);
 		if (!new_hdr)
-			return NULL; /* старый блок жив, cap не тронут */
+			return NULL;
 		new_hdr->cap = new_cap;
+		new_hdr->alloc = hdr->alloc;
 		hdr = new_hdr;
 	}
 	memcpy((char *)(hdr + 1) + elem_size * hdr->len, elem, elem_size);
@@ -36,5 +38,6 @@ YML_PRIVATE void _da_free(void *da)
 {
 	if (!da)
 		return;
-	YMLDEALLOC((_da_hdr *)da - 1);
+	_da_hdr *hdr = (_da_hdr *)da - 1;
+	YMLDEALLOC(hdr, hdr->alloc);
 }
