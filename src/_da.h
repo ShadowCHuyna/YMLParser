@@ -22,10 +22,11 @@ typedef struct
 {
 	size_t len;
 	size_t cap;
+	struct YMLAllocator* alloc;
 } _da_hdr;
 
 /* Выделить новый da для элементов размером elem_size. */
-YML_PRIVATE void *_da_new(size_t elem_size, size_t cap);
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap, struct YMLAllocator* alloc);
 
 /*
  * Добавить элемент (elem_size байт) в конец da.

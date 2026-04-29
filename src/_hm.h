@@ -28,10 +28,11 @@ typedef struct
 	_hm_entry *entries; /* malloc-массив слотов (не da — управляется вручную) */
 	size_t cap;			/* количество слотов (степень двойки) */
 	size_t len;			/* количество занятых слотов */
+	struct YMLAllocator* alloc;
 } _hm;
 
 /* Выделить новую hm. cap — начальное количество слотов (округляется до степени 2). */
-YML_PRIVATE _hm *hm_new(size_t cap);
+YML_PRIVATE _hm *hm_new(size_t cap, struct YMLAllocator* alloc);
 
 /*
  * Вставить или обновить пару key → value.

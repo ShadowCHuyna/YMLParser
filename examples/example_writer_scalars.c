@@ -13,7 +13,7 @@
 int main(void)
 {
 	/* ── построить объект ──────────────────────────────────────────── */
-	YMLValue *obj = YMLCreate();
+	YMLValue *obj = _YMLCreate();
 
 	YMLMapAdd(obj, "name",    "Alice");
 	YMLMapAdd(obj, "age",     (long long)30);
@@ -22,7 +22,7 @@ int main(void)
 	YMLMapAddNull(obj, "token");
 
 	/* вложенный объект — deep-copied, оригинал можно уничтожить */
-	YMLValue *addr = YMLCreate();
+	YMLValue *addr = _YMLCreate();
 	YMLMapAdd(addr, "city",   "Moscow");
 	YMLMapAdd(addr, "zip",    "101000");
 	YMLMapAdd(obj, "address", addr);

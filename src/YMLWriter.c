@@ -31,7 +31,7 @@ static YMLValue _yml_mk_node(YMLValue *v)
 
 /* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
 
-YMLValue *YMLCreate(void)
+YMLValue *_YMLCreate(void)
 {
 	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
@@ -47,7 +47,7 @@ YMLValue *YMLCreate(void)
 	return v;
 }
 
-YMLValue *YMLCreateArr(void)
+YMLValue *_YMLCreateArr(void)
 {
 	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)

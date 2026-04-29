@@ -284,13 +284,13 @@ struct _YMLWriteOptions
  * Allocate an empty YML_OBJECT node.
  * Free with YMLDestroy.
  */
-YMLValue *YMLCreate(void);
+YMLValue *_YMLCreate(void);
 
 /*
  * Allocate an empty YML_ARRAY node.
  * Free with YMLDestroy.
  */
-YMLValue *YMLCreateArr(void);
+YMLValue *_YMLCreateArr(void);
 
 
 /* ── YMLMapAdd ───────────────────────────────────────────────────── */
@@ -427,7 +427,7 @@ int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptio
 		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
 
 
-struct YMLParserAllocator {
+struct YMLAllocator {
 	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
 	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
 	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
@@ -445,7 +445,7 @@ struct YMLParserAllocator {
  * Each hook receives the call-site FILE/LINE for diagnostics; ignore if
  * not needed.
  *
- *   YMLParserSetAllocator((struct YMLParserAllocator){
+ *   YMLParserSetAllocator((struct YMLAllocator){
  *       .alloc   = my_alloc,
  *       .realloc = my_realloc,
  *       .calloc  = my_calloc,
@@ -453,19 +453,19 @@ struct YMLParserAllocator {
  *       .ctx     = &my_ctx,  // forwarded to every call; NULL is fine
  *   });
  */
-void YMLParserSetAllocator(struct YMLParserAllocator allocator);
+void YMLParserSetAllocator(struct YMLAllocator allocator);
 
 #ifdef YMLPARSER_IMPLEMENTATION
 /* YML_PRIVATE — hides internal symbols. */
 #define YML_PRIVATE static
 
 /* ── src/_allocator.h ──────────────────────────────────────────── */
-extern struct YMLParserAllocator YMLParserAllocator;
+extern struct YMLAllocator YMLAllocator;
 
-#define YMLALLOC(len)           (YMLParserAllocator.alloc((len), YMLParserAllocator.ctx, __FILE__, __LINE__))
-#define YMLREALLOC(ptr, new_len)(YMLParserAllocator.realloc((ptr), (new_len), YMLParserAllocator.ctx, __FILE__, __LINE__))
-#define YMLCALLOC(n, size)      (YMLParserAllocator.calloc((n), (size), YMLParserAllocator.ctx, __FILE__, __LINE__))
-#define YMLDEALLOC(ptr)         (YMLParserAllocator.dealloc((ptr), YMLParserAllocator.ctx, __FILE__, __LINE__))
+#define YMLALLOC(len)           (YMLAllocator.alloc((len), YMLAllocator.ctx, __FILE__, __LINE__))
+#define YMLREALLOC(ptr, new_len)(YMLAllocator.realloc((ptr), (new_len), YMLAllocator.ctx, __FILE__, __LINE__))
+#define YMLCALLOC(n, size)      (YMLAllocator.calloc((n), (size), YMLAllocator.ctx, __FILE__, __LINE__))
+#define YMLDEALLOC(ptr)         (YMLAllocator.dealloc((ptr), YMLAllocator.ctx, __FILE__, __LINE__))
 
 /* ── src/_da.h ─────────────────────────────────────────────────── */
 /*
@@ -3158,7 +3158,7 @@ static YMLValue _yml_mk_node(YMLValue *v)
 
 /* ── YMLCreate / YMLCreateArr ───────────────────────────────────────── */
 
-YMLValue *YMLCreate(void)
+YMLValue *_YMLCreate(void)
 {
 	YMLValue *v = YMLALLOC(sizeof(YMLValue));
 	if (!v)
@@ -3708,7 +3708,7 @@ static void malloc_dealloc(void* ptr, void* ctx, const char* FILE, int LINE) {
 	free(ptr);
 }
 
-struct YMLParserAllocator YMLParserAllocator = {
+struct YMLAllocator YMLAllocator = {
 	.alloc   = malloc_alloc,
 	.realloc = malloc_realloc,
 	.calloc  = malloc_calloc,
@@ -3716,8 +3716,8 @@ struct YMLParserAllocator YMLParserAllocator = {
 	.ctx     = NULL
 };
 
-void YMLParserSetAllocator(struct YMLParserAllocator allocator) {
-	YMLParserAllocator = allocator;
+void YMLParserSetAllocator(struct YMLAllocator allocator) {
+	YMLAllocator = allocator;
 }
 
 #endif /* YMLPARSER_IMPLEMENTATION */

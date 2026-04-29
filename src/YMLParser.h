@@ -29,6 +29,16 @@ typedef enum YMLValueType
 	YML_OBJECT,
 } YMLValueType;
 
+
+struct YMLAllocator {
+	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
+	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
+	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
+	void  (*dealloc)(void* ptr,                 void* ctx, const char* FILE, int LINE);
+	void* ctx;
+};
+
+
 /*
  * YMLValue — a single node in the parse tree.
  *
@@ -53,6 +63,7 @@ typedef struct YMLValue
 		void *object;			// _hm* — opaque pointer, access via YMLMapGet/YMLMapForech
 		struct YMLValue *array; // da<YMLValue> — direct indexing arr[i], length via YMLArrayLen
 	} value;
+	struct YMLAllocator* allocator; 
 } YMLValue;
 
 /*
@@ -81,6 +92,7 @@ struct _YMLOptionals
 	char **error;	   // *error points to a buffer with the error message
 	YMLValueType type; // for YMLMapGet: expected type (YML_ANY — skip check)
 	char splitter;	   // for YMLMapGet: if non-zero, split key by this char and traverse nested objects
+	struct YMLAllocator* allocator;
 };
 
 /*
@@ -239,6 +251,7 @@ struct _YMLWriteOptions
 	char **error;
 	int    indent;
 	int    start;
+	struct YMLAllocator* allocator;
 };
 
 /* ── Create ──────────────────────────────────────────────────────── */
@@ -247,14 +260,19 @@ struct _YMLWriteOptions
  * Allocate an empty YML_OBJECT node.
  * Free with YMLDestroy.
  */
-YMLValue *YMLCreate(void);
+YMLValue *_YMLCreate(void);
 
+#define YMLCreate(...) \
+	_YMLCreate((struct _YMLWriteOptions){.ok = NULL, .error = NULL, __VA_ARGS__})
+	
 /*
  * Allocate an empty YML_ARRAY node.
  * Free with YMLDestroy.
  */
-YMLValue *YMLCreateArr(void);
+YMLValue *_YMLCreateArr(void);
 
+#define YMLCreateArr(...) \
+	_YMLCreateArr((struct _YMLWriteOptions){.ok = NULL, .error = NULL, __VA_ARGS__})
 
 /* ── YMLMapAdd ───────────────────────────────────────────────────── */
 
@@ -388,32 +406,3 @@ int  _YMLWriteBuf   (YMLValue *obj, char *buf, size_t cap, struct _YMLWriteOptio
 #define YMLWriteBuf(obj, buf, cap, ...) \
 	_YMLWriteBuf(obj, buf, cap, \
 		(struct _YMLWriteOptions){.indent = 2, .start = 0, ##__VA_ARGS__})
-
-
-struct YMLParserAllocator {
-	void* (*alloc)  (size_t len,               void* ctx, const char* FILE, int LINE);
-	void* (*realloc)(void* ptr, size_t new_len, void* ctx, const char* FILE, int LINE);
-	void* (*calloc) (size_t n, size_t size,     void* ctx, const char* FILE, int LINE);
-	void  (*dealloc)(void* ptr,                 void* ctx, const char* FILE, int LINE);
-	void* ctx;
-};
-
-/*
- * YMLParserSetAllocator — replaces the global allocator used by the parser.
- *
- * Must be called before any YMLParse / YMLCreate / YMLDestroy.
- * The allocator is a plain global, not thread-local: set it once at startup
- * before spawning threads.
- *
- * Each hook receives the call-site FILE/LINE for diagnostics; ignore if
- * not needed.
- *
- *   YMLParserSetAllocator((struct YMLParserAllocator){
- *       .alloc   = my_alloc,
- *       .realloc = my_realloc,
- *       .calloc  = my_calloc,
- *       .dealloc = my_free,
- *       .ctx     = &my_ctx,  // forwarded to every call; NULL is fine
- *   });
- */
-void YMLParserSetAllocator(struct YMLParserAllocator allocator);

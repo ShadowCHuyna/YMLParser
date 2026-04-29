@@ -12,7 +12,7 @@
 int main(void)
 {
 	/* ── плоский массив смешанных типов ────────────────────────────── */
-	YMLValue *mixed = YMLCreateArr();
+	YMLValue *mixed = _YMLCreateArr();
 	YMLArrPush(mixed, (long long)1);
 	YMLArrPush(mixed, 2.5);
 	YMLArrPush(mixed, "three");
@@ -24,7 +24,7 @@ int main(void)
 	YMLDestroy(mixed);
 
 	/* ── объект с C-массивами ──────────────────────────────────────── */
-	YMLValue *obj = YMLCreate();
+	YMLValue *obj = _YMLCreate();
 
 	long long scores[] = {95, 87, 100, 73};
 	YMLMapAddArr(obj, "scores", scores, 4);
@@ -33,7 +33,7 @@ int main(void)
 	YMLMapAddArr(obj, "tags", tags, 3);
 
 	/* вложенный массив как значение ключа */
-	YMLValue *matrix_row = YMLCreateArr();
+	YMLValue *matrix_row = _YMLCreateArr();
 	YMLArrPush(matrix_row, (long long)1);
 	YMLArrPush(matrix_row, (long long)2);
 	YMLArrPush(matrix_row, (long long)3);
@@ -45,13 +45,13 @@ int main(void)
 	YMLDestroy(obj);
 
 	/* ── массив объектов ───────────────────────────────────────────── */
-	YMLValue *users = YMLCreateArr();
+	YMLValue *users = _YMLCreateArr();
 	const char *names[] = {"Alice", "Bob", "Carol"};
 	const long long ages[] = {30, 25, 28};
 
 	for (int i = 0; i < 3; i++)
 	{
-		YMLValue *user = YMLCreate();
+		YMLValue *user = _YMLCreate();
 		YMLMapAdd(user, "name", names[i]);
 		YMLMapAdd(user, "age",  ages[i]);
 		YMLArrPush(users, user);

@@ -29,7 +29,7 @@ static size_t next_pow2(size_t n)
 	return n + 1;
 }
 
-YML_PRIVATE _hm *hm_new(size_t cap)
+YML_PRIVATE _hm *hm_new(size_t cap, struct YMLAllocator* alloc)
 {
 	_hm *hm = YMLALLOC(sizeof(_hm));
 	if (!hm)

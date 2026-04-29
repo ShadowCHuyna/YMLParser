@@ -53,7 +53,7 @@ static void log_free(void *ptr, void *ctx, const char *file, int line)
 
 int main(void)
 {
-	YMLParserSetAllocator((struct YMLParserAllocator){
+	YMLParserSetAllocator((struct YMLAllocator){
 		.alloc   = log_alloc,
 		.realloc = log_realloc,
 		.calloc  = log_calloc,

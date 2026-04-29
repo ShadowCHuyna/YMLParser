@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-YML_PRIVATE void *_da_new(size_t elem_size, size_t cap)
+YML_PRIVATE void *_da_new(size_t elem_size, size_t cap, struct YMLAllocator* alloc)
 {
 	if (cap == 0)
 		cap = 4;
