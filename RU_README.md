@@ -93,7 +93,16 @@ typedef struct YMLValue {
         void           *object;
         struct YMLValue *array;
     } value;
+    struct YMLAllocator *allocator; // аллокатор дерева (наследуется дочерними узлами)
 } YMLValue;
+
+struct YMLAllocator {
+    void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
+    void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
+    void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
+    void  (*dealloc)(void *ptr,                void *ctx, const char *file, int line);
+    void *ctx;
+};
 ```
 
 ---
@@ -110,11 +119,15 @@ YMLValue *YMLParse(const char *yml_str, ...options...);
 |-------|-----|--------------|----------|
 | `.ok` | `int*` | `NULL` | Код результата: `0` — успех, `1` — синтакс. ошибка, `2` — OOM |
 | `.error` | `char**` | `NULL` | Текст ошибки (указатель на внутренний буфер) |
+| `.allocator` | `struct YMLAllocator*` | `NULL` | Кастомный аллокатор для этого дерева; `NULL` — стандартные `malloc`/`free` |
 
 ```c
 int ok = 0; char *err = NULL;
 YMLValue *root = YMLParse("x: 1\n", .ok=&ok, .error=&err);
 if (ok != 0) fprintf(stderr, "error %d: %s\n", ok, err);
+
+// с кастомным аллокатором
+YMLValue *root2 = YMLParse("x: 1\n", .allocator=&my_allocator);
 ```
 
 ---
@@ -131,6 +144,9 @@ YMLValue **YMLParseStream(const char *yml_str, ...options...);
 YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok=&ok);
 for (size_t i = 0; i < YMLArrayLen(docs); i++) { /* docs[i] */ }
 YMLDestroyStream(docs);
+
+// с кастомным аллокатором
+YMLValue **docs2 = YMLParseStream("---\nfoo: 1\n", .allocator=&my_allocator);
 ```
 
 ---
@@ -289,16 +305,18 @@ if (YMLPrintError() != 0) { /* ... */ }
 ### YMLCreate / YMLCreateArr
 
 ```c
-YMLValue *YMLCreate(void);
-YMLValue *YMLCreateArr(void);
+YMLValue *YMLCreate(struct YMLAllocator *allocator);
+YMLValue *YMLCreateArr(struct YMLAllocator *allocator);
 ```
 
-Создают пустой `YML_OBJECT` или `YML_ARRAY`. Освобождать через `YMLDestroy`.
+Создают пустой `YML_OBJECT` или `YML_ARRAY`. Передайте `NULL` для использования стандартного аллокатора. Освобождать через `YMLDestroy`.
 
 ```c
-YMLValue *obj = YMLCreate();     // пустое отображение
-YMLValue *arr = YMLCreateArr();  // пустая последовательность
+YMLValue *obj = YMLCreate(NULL);           // пустое отображение, стандартный alloc
+YMLValue *arr = YMLCreateArr(&my_alloc);   // пустая последовательность, кастомный alloc
 ```
+
+Все дочерние узлы, добавленные через `YMLMapAdd` / `YMLArrPush`, автоматически наследуют аллокатор родителя.
 
 ---
 
@@ -326,7 +344,7 @@ YMLMapAddArr(obj, key, c_array, len);
 `YMLMapAddArr` конвертирует C-массив в дочерний `YML_ARRAY`. Поддерживаются `long long[]`, `double[]`, `const char*[]`.
 
 ```c
-YMLValue *obj = YMLCreate();
+YMLValue *obj = YMLCreate(NULL);
 YMLMapAdd(obj, "name",   "Alice");
 YMLMapAdd(obj, "age",    (long long)30);
 YMLMapAdd(obj, "score",  98.6);
@@ -353,7 +371,7 @@ YMLArrPushArr(arr, c_array, len);
 Добавляют элемент в `YML_ARRAY`. Те же правила вывода типа, что у `YMLMapAdd`. Вложенный `YMLValue*` глубоко копируется.
 
 ```c
-YMLValue *arr = YMLCreateArr();
+YMLValue *arr = YMLCreateArr(NULL);
 YMLArrPush(arr, (long long)1);
 YMLArrPush(arr, 2.5);
 YMLArrPush(arr, "three");
@@ -398,7 +416,7 @@ if (ok != 0) fprintf(stderr, "write error\n");
 Пример round-trip:
 
 ```c
-YMLValue *obj = YMLCreate();
+YMLValue *obj = YMLCreate(NULL);
 YMLMapAdd(obj, "x", (long long)1);
 
 char buf[256];
@@ -457,7 +475,7 @@ if (YMLErrorPrint() != 0) return 1;
 
 ## Кастомный аллокатор
 
-По умолчанию все операции с кучей (`malloc`, `realloc`, `calloc`, `free`) идут через стандартную библиотеку C. Заменить их можно глобально через `YMLParserSetAllocator` до первого вызова функций парсера:
+По умолчанию все операции с кучей используют стандартную библиотеку C (`malloc`/`free`). Вы можете передать кастомный аллокатор **для каждого дерева отдельно**, указав `struct YMLAllocator*` в `YMLParse`, `YMLParseStream`, `YMLCreate` или `YMLCreateArr`. Аллокатор наследуется всеми дочерними узлами — строки, записи hash-map, динамические массивы и вложенные узлы используют тот же аллокатор, что и корень.
 
 ```c
 #define YMLPARSER_IMPLEMENTATION
@@ -468,33 +486,55 @@ static void *my_realloc(void *ptr, size_t len,   void *ctx, const char *file, in
 static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, int line);
 static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
 
-// вызвать до любого YMLParse / YMLCreate
-YMLParserSetAllocator((struct _YMLParserAllocator){
+struct YMLAllocator my_allocator = {
     .alloc   = my_alloc,
     .realloc = my_realloc,
     .calloc  = my_calloc,
     .dealloc = my_free,
     .ctx     = NULL,   // передаётся в каждый вызов; подходит для arena-указателя и т.п.
-});
+};
+
+// Парсинг с кастомным аллокатором
+YMLValue *root = YMLParse(yml, .allocator = &my_allocator);
+
+// Создание узлов с кастомным аллокатором
+YMLValue *obj = YMLCreate(&my_allocator);
+YMLMapAdd(obj, "name", "Alice");
+
+// NULL — возврат к стандартным malloc/free
+YMLValue *root2 = YMLParse(yml, .allocator = NULL);
+YMLValue *obj2  = YMLCreate(NULL);
 ```
 
-Структура и функция объявлены в `YMLParser.h`:
+Структура объявлена в `YMLParser.h`:
 
 ```c
-struct YMLParserAllocator {
+struct YMLAllocator {
     void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
     void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
     void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
     void  (*dealloc)(void *ptr,                void *ctx, const char *file, int line);
     void *ctx;
 };
-
-void YMLParserSetAllocator(struct YMLParserAllocator allocator);
 ```
 
 `file` и `line` — это `__FILE__` / `__LINE__` на месте вызова, полезны для диагностики и отслеживания утечек. Если не нужны — просто игнорировать.
 
-> Аллокатор — обычная глобальная переменная, не `_Thread_local`. При многопоточном использовании — установить один раз при старте, до создания потоков.
+> **Потокобезопасность:** поскольку каждое дерево несёт свой собственный аллокатор, разные потоки могут безопасно использовать разные аллокаторы без какого-либо глобального состояния.
+
+### Наследование аллокатора
+
+Когда вы передаёте аллокатор в `YMLParse` или `YMLCreate`, каждый узел результирующего дерева хранит указатель на этот аллокатор. Все последующие операции — добавление дочерних элементов, push в массивы, глубокое копирование — используют аллокатор родителя:
+
+```c
+YMLValue *root = YMLParse(yml, .allocator = &my_allocator);
+
+// Все эти выделения памяти идут через my_allocator:
+YMLValue *child = YMLCreate(root->allocator);
+YMLMapAdd(root->value.object, "child", child);
+```
+
+`YMLDestroy` использует сохранённый аллокатор каждого узла для освобождения памяти, поэтому вам не нужно отслеживать, какой аллокатор использовался — просто вызовите `YMLDestroy(root)`.
 
 ---
 

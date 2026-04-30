@@ -708,10 +708,12 @@ static inline char *yml_strdup(const char *s, struct YMLAllocator* alloc)
 
 /*
  * Рекурсивная глубокая копия YMLValue.
+ * Если target_alloc != NULL — все ноды получат этот allocator.
+ * Иначе копирует allocator из src.
  * Возвращает heap-аллоцированный YMLValue* или NULL при OOM.
  * Реализация в _yml_utils.c.
  */
-YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src);
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src, struct YMLAllocator *target_alloc);
 
 static inline void yml_value_free_impl(YMLValue *v)
 {
@@ -1735,11 +1737,11 @@ YML_PRIVATE Token *lex(const char *src, const char **error_out)
 }
 
 /* ── src/_yml_utils.c ──────────────────────────────────────────── */
-YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
+YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src, struct YMLAllocator *target_alloc)
 {
 	if (!src)
 		return NULL;
-	struct YMLAllocator* alloc = src->allocator;
+	struct YMLAllocator* alloc = target_alloc ? target_alloc : src->allocator;
 	YMLValue *v = YMLALLOC(sizeof(YMLValue), alloc);
 	if (!v)
 		return NULL;
@@ -1762,7 +1764,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		YMLValue *arr = da_new(YMLValue, n > 0 ? n : 1, alloc);
 		for (size_t i = 0; i < n; i++)
 		{
-			YMLValue *cp = yml_deep_copy(&src->value.array[i]);
+			YMLValue *cp = yml_deep_copy(&src->value.array[i], alloc);
 			if (cp)
 			{
 				da_push(arr, *cp);
@@ -1781,7 +1783,7 @@ YML_PRIVATE YMLValue *yml_deep_copy(const YMLValue *src)
 		YMLValue *val;
 		while (hm_next(src_hm, &idx, &key, &val))
 		{
-			YMLValue *cp = yml_deep_copy(val);
+			YMLValue *cp = yml_deep_copy(val, alloc);
 			if (cp)
 			{
 				hm_set(dst_hm, key, *cp);
@@ -2308,7 +2310,7 @@ static void anchor_add(Parser *p, const char *name, size_t name_len, YMLValue *n
 		return;
 	memcpy(n, name, name_len);
 	n[name_len] = '\0';
-	_anchor_entry e = {.name = n, .node = yml_deep_copy(node)};
+	_anchor_entry e = {.name = n, .node = yml_deep_copy(node, NULL)};
 	da_push(p->anchors, e);
 }
 
@@ -2641,7 +2643,7 @@ static void apply_merge(_hm *dst, const YMLValue *src)
 		{
 			if (!hm_get(dst, key))
 			{
-				YMLValue *cp = yml_deep_copy(val);
+				YMLValue *cp = yml_deep_copy(val, NULL);
 				if (cp)
 				{
 					hm_set(dst, key, *cp);
@@ -2782,7 +2784,7 @@ static YMLValue *parse_node(Parser *p, int min_indent)
 			return NULL;
 		}
 		advance(p);
-		v = yml_deep_copy(orig);
+		v = yml_deep_copy(orig, NULL);
 	}
 	else if (t->type == TK_FLOW_SEQ_START)
 	{
@@ -3137,15 +3139,15 @@ static YMLValue _yml_mk_str(const char *v, struct YMLAllocator* alloc)
 	return r;
 }
 
-static YMLValue _yml_mk_node(YMLValue *v)
+static YMLValue _yml_mk_node(YMLValue *v, struct YMLAllocator *target_alloc)
 {
 	if (!v)
 		return (YMLValue){.type = YML_NULL};
-	YMLValue *cp = yml_deep_copy(v);
+	YMLValue *cp = yml_deep_copy(v, target_alloc);
 	if (!cp)
 		return (YMLValue){.type = YML_NULL};
 	YMLValue r = *cp;
-	YMLDEALLOC(cp, cp->allocator);
+	YMLDEALLOC(cp, r.allocator);
 	return r;
 }
 
@@ -3225,7 +3227,7 @@ void _YMLMapAdd_str(YMLValue *obj, const char *key, const char *val)
 
 void _YMLMapAdd_node(YMLValue *obj, const char *key, YMLValue *val)
 {
-	map_insert(obj, key, _yml_mk_node(val));
+	map_insert(obj, key, _yml_mk_node(val, obj->allocator));
 }
 
 static YMLValue *_yml_build_int_arr(const long long *arr, size_t len, struct YMLAllocator* alloc)
@@ -3317,7 +3319,7 @@ void _YMLArrPush_str(YMLValue *arr, const char *val)
 
 void _YMLArrPush_node(YMLValue *arr, YMLValue *val)
 {
-	da_push(arr->value.array, _yml_mk_node(val));
+	da_push(arr->value.array, _yml_mk_node(val, arr->allocator));
 }
 
 void _YMLArrPushArr_int(YMLValue *arr, const long long *c_arr, size_t len)

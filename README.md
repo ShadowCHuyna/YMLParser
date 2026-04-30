@@ -95,7 +95,16 @@ typedef struct YMLValue {
         void           *object;
         struct YMLValue *array;
     } value;
+    struct YMLAllocator *allocator; // per-tree allocator (inherited by children)
 } YMLValue;
+
+struct YMLAllocator {
+    void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
+    void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
+    void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
+    void  (*dealloc)(void *ptr,                void *ctx, const char *file, int line);
+    void *ctx;
+};
 ```
 
 ---
@@ -112,11 +121,15 @@ Parses a single YAML document. If multiple `---` markers are present, only the f
 |--------|------|---------|-------------|
 | `.ok` | `int*` | `NULL` | Result code: `0` — success, `1` — syntax error, `2` — OOM |
 | `.error` | `char**` | `NULL` | Error message (pointer to an internal buffer) |
+| `.allocator` | `struct YMLAllocator*` | `NULL` | Custom allocator for this parse tree; `NULL` uses standard `malloc`/`free` |
 
 ```c
 int ok = 0; char *err = NULL;
 YMLValue *root = YMLParse("x: 1\n", .ok=&ok, .error=&err);
 if (ok != 0) fprintf(stderr, "error %d: %s\n", ok, err);
+
+// with custom allocator
+YMLValue *root2 = YMLParse("x: 1\n", .allocator=&my_allocator);
 ```
 
 ---
@@ -133,6 +146,9 @@ Parses a YAML stream of multiple documents separated by `---`. Returns `da<YMLVa
 YMLValue **docs = YMLParseStream("---\nfoo: 1\n---\nbar: 2\n", .ok=&ok);
 for (size_t i = 0; i < YMLArrayLen(docs); i++) { /* docs[i] */ }
 YMLDestroyStream(docs);
+
+// with custom allocator
+YMLValue **docs2 = YMLParseStream("---\nfoo: 1\n", .allocator=&my_allocator);
 ```
 
 ---
@@ -291,16 +307,18 @@ if (YMLPrintError() != 0) { /* ... */ }
 ### YMLCreate / YMLCreateArr
 
 ```c
-YMLValue *YMLCreate(void);
-YMLValue *YMLCreateArr(void);
+YMLValue *YMLCreate(struct YMLAllocator *allocator);
+YMLValue *YMLCreateArr(struct YMLAllocator *allocator);
 ```
 
-Create an empty `YML_OBJECT` or `YML_ARRAY` node. Free with `YMLDestroy`.
+Create an empty `YML_OBJECT` or `YML_ARRAY` node. Pass `NULL` to use the standard allocator. Free with `YMLDestroy`.
 
 ```c
-YMLValue *obj = YMLCreate();     // empty mapping
-YMLValue *arr = YMLCreateArr();  // empty sequence
+YMLValue *obj = YMLCreate(NULL);           // empty mapping, standard alloc
+YMLValue *arr = YMLCreateArr(&my_alloc);   // empty sequence, custom alloc
 ```
+
+All children added via `YMLMapAdd` / `YMLArrPush` inherit the parent node's allocator automatically.
 
 ---
 
@@ -328,7 +346,7 @@ Duplicate keys are overwritten (old value freed). When adding a nested `YMLValue
 `YMLMapAddArr` converts a plain C array into a `YML_ARRAY` child and supports `long long[]`, `double[]`, and `const char*[]`.
 
 ```c
-YMLValue *obj = YMLCreate();
+YMLValue *obj = YMLCreate(NULL);
 YMLMapAdd(obj, "name",   "Alice");
 YMLMapAdd(obj, "age",    (long long)30);
 YMLMapAdd(obj, "score",  98.6);
@@ -355,7 +373,7 @@ YMLArrPushArr(arr, c_array, len);
 Append an element to a `YML_ARRAY`. Same type inference rules as `YMLMapAdd`. Nested `YMLValue*` is deep-copied.
 
 ```c
-YMLValue *arr = YMLCreateArr();
+YMLValue *arr = YMLCreateArr(NULL);
 YMLArrPush(arr, (long long)1);
 YMLArrPush(arr, 2.5);
 YMLArrPush(arr, "three");
@@ -400,7 +418,7 @@ if (ok != 0) fprintf(stderr, "write error\n");
 Round-trip example:
 
 ```c
-YMLValue *obj = YMLCreate();
+YMLValue *obj = YMLCreate(NULL);
 YMLMapAdd(obj, "x", (long long)1);
 
 char buf[256];
@@ -459,7 +477,7 @@ Error state is `_Thread_local` — each thread sees only its own errors.
 
 ## Custom allocator
 
-By default all heap operations (`malloc`, `realloc`, `calloc`, `free`) go through the C standard library. You can replace them globally before calling any parser function via `YMLParserSetAllocator`:
+By default all heap operations use the standard C library (`malloc`/`free`). You can provide a custom allocator **per parse tree** by passing a `struct YMLAllocator*` to `YMLParse`, `YMLParseStream`, `YMLCreate`, or `YMLCreateArr`. The allocator propagates to every child node — strings, hash-map entries, dynamic arrays, and nested nodes all use the same allocator as the root.
 
 ```c
 #define YMLPARSER_IMPLEMENTATION
@@ -470,33 +488,55 @@ static void *my_realloc(void *ptr, size_t len,   void *ctx, const char *file, in
 static void *my_calloc (size_t n,  size_t size,  void *ctx, const char *file, int line);
 static void  my_free   (void *ptr,               void *ctx, const char *file, int line);
 
-// call before any YMLParse / YMLCreate
-YMLParserSetAllocator((struct _YMLParserAllocator){
+struct YMLAllocator my_allocator = {
     .alloc   = my_alloc,
     .realloc = my_realloc,
     .calloc  = my_calloc,
     .dealloc = my_free,
     .ctx     = NULL,   // forwarded to every call; use for arena pointer, etc.
-});
+};
+
+// Parse with custom allocator
+YMLValue *root = YMLParse(yml, .allocator = &my_allocator);
+
+// Create nodes with custom allocator
+YMLValue *obj = YMLCreate(&my_allocator);
+YMLMapAdd(obj, "name", "Alice");
+
+// NULL falls back to standard malloc/free
+YMLValue *root2 = YMLParse(yml, .allocator = NULL);
+YMLValue *obj2  = YMLCreate(NULL);
 ```
 
 The struct is defined in `YMLParser.h`:
 
 ```c
-struct YMLParserAllocator {
-    void* (*alloc)  (size_t len,              void *ctx, const char *file, int line);
+struct YMLAllocator {
+    void* (*alloc)  (size_t len,               void *ctx, const char *file, int line);
     void* (*realloc)(void *ptr, size_t new_len, void *ctx, const char *file, int line);
-    void* (*calloc) (size_t n,  size_t size,  void *ctx, const char *file, int line);
-    void  (*dealloc)(void *ptr,               void *ctx, const char *file, int line);
+    void* (*calloc) (size_t n,  size_t size,   void *ctx, const char *file, int line);
+    void  (*dealloc)(void *ptr,                void *ctx, const char *file, int line);
     void *ctx;
 };
-
-void YMLParserSetAllocator(struct YMLParserAllocator allocator);
 ```
 
 `file` and `line` are the call-site `__FILE__` / `__LINE__` — useful for diagnostics and leak tracking. Ignore them if not needed.
 
-> The allocator is a plain global variable, not thread-local. If multiple threads call the parser concurrently, set the allocator once at startup before spawning threads.
+> **Thread safety:** since each tree carries its own allocator, different threads can safely use different allocators without any global state.
+
+### Allocator inheritance
+
+When you pass an allocator to `YMLParse` or `YMLCreate`, every node in the resulting tree stores a pointer to that allocator. All subsequent operations — adding children, pushing array elements, deep-copying nodes — use the parent's allocator:
+
+```c
+YMLValue *root = YMLParse(yml, .allocator = &my_allocator);
+
+// All these allocations go through my_allocator:
+YMLValue *child = YMLCreate(root->allocator);
+YMLMapAdd(root->value.object, "child", child);
+```
+
+`YMLDestroy` uses each node's stored allocator to free memory, so you don't need to track which allocator was used — just call `YMLDestroy(root)`.
 
 ---
 
